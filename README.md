@@ -1,13 +1,15 @@
-# Boilerplate for Projects on GitHub
+# Tetris Min-Max A.I. & Custom Simulation
 
-This is the boilerplate for all my personal projects on GitHub. (This is the brief description for this repository)
+Creating a simulation of tetris from scratch that is both playable by a user, as well as both of the AI's I developed
 
 <br>
 
 ## Summary
- - This is the template boilerplate repository for all personal projects that I have on my GitHub. 
- - This template will expedite the creation and maintenance of all my various projects' repositories.
- - And more importantly, the standardized format will allow for auto parsing of the repository by a python script to automatically update my personal portfolio website.  
+ - Created an accurate and faithful Tetris simulation using Python and the Tkinter interface that is playable by the user while also easily and seemlessly interfacing with the AI
+ - Goal was to create a basic single agent online AI that can clear several levels on average as well as score well before inevitably losing
+ - Two different AIs were created, trained, and evaluated to examine if increased complexity in the AI is directly related to improved performance
+ - Overall, both AIs functioned relatively well, but were wildly inconsistent - About 1 in 10 trials would result in the AI failing to even score a single point or it would score in the hundreds of thousands, clearing anywhere from levels 9-13
+ - In the end, the less complex algorithm was faster with near identical performance
 
 <br>
 
@@ -27,8 +29,8 @@ This is the boilerplate for all my personal projects on GitHub. (This is the bri
 
 ## Project Metadata
 
-**Project Status** : (Active, Inactive, Archived)  
-**Project Progress** : (Concept, In Progress, Functional, Completed)
+**Project Status** : Archived
+**Project Progress** : Complete
 
-**Project dates** : Jan '22 - Present  
+**Project dates** : Oct '20 - Dec '20  
 
