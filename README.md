@@ -1,6 +1,6 @@
 # Tetris Min-Max A.I. & Custom Simulation
 
-Creating a simulation of tetris from scratch that is both playable by a user, as well as both of the AI's I developed
+Creating a simulation of tetris from scratch that is playable by a user and both AI's I developed
 
 <br>
 
