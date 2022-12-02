@@ -1,6 +1,6 @@
 # Tetris Min-Max A.I. & Custom Simulation
 
-Creating a simulation of tetris from scratch that is playable by a user and both AI's I developed
+Creating a simulation of tetris from scratch to host/run different AI that I developed, and is also playable by a user via keyboard inputs.
 
 <br>
 
@@ -13,17 +13,11 @@ Creating a simulation of tetris from scratch that is playable by a user and both
 
 <br>
 
-## Image Gallery
-
-### Placeholder Image (This is the image's caption/label)
-![Please end my suffering... (This is the image's alt text)](https://github.com/a-dubs/github-project-template/blob/master/image_gallery/Please%20replace%20me%20I%20am%20begging%20you.jpg)
-<br>
-
-<!-- 
+<!-- ## Image Gallery
+ 
 ### (This is the image's caption/label)
 ![(This is the image's alt text)](full_http_path_to_image)
-<br> 
--->
+<br> -->
 
 <br>
 
