@@ -25,6 +25,5 @@ Creating a simulation of tetris from scratch to host/run different AI that I dev
 
 **Project Status** : Archived
 **Project Progress** : Complete
-
 **Project dates** : Oct '20 - Dec '20  
 
