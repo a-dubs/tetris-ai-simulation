@@ -1,0 +1,1 @@
+print(1/float(10))
