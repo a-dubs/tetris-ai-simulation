@@ -13,11 +13,11 @@ Creating a simulation of tetris from scratch to host/run different AI that I dev
 
 <br>
 
-<!-- ## Image Gallery
+## Image Gallery
  
-### (This is the image's caption/label)
-![(This is the image's alt text)](full_http_path_to_image)
-<br> -->
+### AI Playing The Tetris Simulation 
+![(Demo of the tetris simulation running and being played by the AI)](/image_gallery/simulation_demo.gif)
+<br>
 
 <br>
 
