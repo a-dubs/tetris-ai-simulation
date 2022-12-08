@@ -16,7 +16,7 @@ Creating a simulation of tetris from scratch to host/run different AI that I dev
 ## Image Gallery
  
 ### AI Playing The Tetris Simulation 
-![(Demo of the tetris simulation running and being played by the AI)](/image_gallery/simulation_demo.gif)
+![(Demo of the tetris simulation running and being played by the AI)](https://github.com/a-dubs/tetris-ai-simulation/blob/master/image_gallery/simulation_demo.gif)
 <br>
 
 <br>
