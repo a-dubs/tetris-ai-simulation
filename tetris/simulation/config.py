@@ -19,6 +19,7 @@ class SimulationConfig:
 
     # Rendering
     headless: bool = True  # Run without GUI
+    render_delay: float = 0.05  # Delay between renders in seconds (for GUI visualization)
 
     # Game settings
     initial_level: int = 1  # Starting level

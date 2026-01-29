@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 from typing import Optional
+import copy
+import time
 
 from tetris.core.game_engine import GameEngine
 from tetris.core.game_state import GameState
@@ -64,6 +66,10 @@ class Simulator:
 
         # Main game loop
         while not self.engine.state.game_over:
+            # Check if renderer window was closed (for GUI renderers)
+            if hasattr(self.renderer, "is_running") and not self.renderer.is_running():
+                break
+
             # Check termination conditions
             if moves_executed >= self.config.max_moves:
                 break
@@ -86,10 +92,16 @@ class Simulator:
                 # Render after move
                 self.renderer.render(self.engine.state)
 
+                # Add delay for GUI visualization (if not headless)
+                if not self.config.headless and self.config.render_delay > 0:
+                    time.sleep(self.config.render_delay)
+
                 # If piece was dropped, update playfield and spawn new piece
                 if move == "drop":
+                    # Use current state's active tetrimino
+                    active_tet_for_placement = self.engine.state.active_tetrimino
                     new_state, lines_cleared = self.engine.update_playfield(
-                        self.engine.state.active_tetrimino
+                        active_tet_for_placement
                     )
 
                     # Update score and level
@@ -117,8 +129,16 @@ class Simulator:
                         y=TOTAL_PLAYFIELD_HEIGHT - 3,
                     )
 
-                    # Check game over
+                    # Check if tetrimino has landed (if not, move it down one)
                     temp_engine = GameEngine(initial_state=new_state)
+                    if temp_engine.valid_location(active_tet):
+                        # Check if it can fall further
+                        test_tet = copy.copy(active_tet)
+                        test_tet.y -= 1
+                        if temp_engine.valid_location(test_tet):
+                            active_tet.y -= 1  # Move down if it hasn't landed
+
+                    # Check game over after position adjustment
                     game_over = not temp_engine.valid_location(active_tet)
 
                     # Update state
@@ -138,6 +158,14 @@ class Simulator:
 
                     # Render after state update
                     self.renderer.render(self.engine.state)
+
+                    # Add delay for GUI visualization (if not headless)
+                    if not self.config.headless and self.config.render_delay > 0:
+                        time.sleep(self.config.render_delay)
+
+        # Cleanup renderer resources
+        if hasattr(self.renderer, "cleanup"):
+            self.renderer.cleanup()
 
         return SimulationResult(
             final_state=self.engine.state,

@@ -52,13 +52,21 @@ def create_renderer(headless: bool) -> Renderer:
 
     Returns:
         Renderer instance
-
-    Note:
-        GUI renderer not yet implemented, always returns HeadlessRenderer
     """
     if headless:
         return HeadlessRenderer()
     else:
-        # TODO: Implement GUI renderer
-        # For now, return headless renderer
-        return HeadlessRenderer()
+        try:
+            from tetris.render.pygame_gui import PygameRenderer
+
+            return PygameRenderer()
+        except ImportError:
+            # Fallback to headless if pygame not available
+            import warnings
+
+            warnings.warn(
+                "Pygame not available, falling back to headless renderer. "
+                "Install pygame with: pip install pygame",
+                UserWarning,
+            )
+            return HeadlessRenderer()

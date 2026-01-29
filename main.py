@@ -19,6 +19,7 @@ def run_game(args):
         max_time=args.max_time,
         initial_level=args.level,
         moves_per_second=args.mps,
+        render_delay=args.render_delay,
     )
 
     engine = GameEngine()
@@ -88,8 +89,8 @@ Examples:
     run_parser.add_argument(
         "--headless",
         action="store_true",
-        default=True,
-        help="Run without GUI (default: True)",
+        default=False,
+        help="Run without GUI (default: False, shows Pygame window)",
     )
     run_parser.add_argument(
         "--max-moves",
@@ -114,6 +115,12 @@ Examples:
         type=int,
         default=4,
         help="Moves per second (default: 4)",
+    )
+    run_parser.add_argument(
+        "--render-delay",
+        type=float,
+        default=0.05,
+        help="Delay between renders in seconds for GUI (default: 0.05)",
     )
 
     # Train command
