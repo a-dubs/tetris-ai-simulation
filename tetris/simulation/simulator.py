@@ -71,7 +71,7 @@ class Simulator:
                 break
 
             # Check termination conditions
-            if moves_executed >= self.config.max_moves:
+            if self.config.max_moves is not None and moves_executed >= self.config.max_moves:
                 break
 
             if self.config.max_time and time_elapsed >= self.config.max_time:

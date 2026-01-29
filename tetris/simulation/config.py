@@ -13,7 +13,7 @@ class SimulationConfig:
     ai_params: Optional[dict] = None  # Optional AI-specific parameters
 
     # Simulation settings
-    max_moves: int = 10000  # Maximum moves before stopping
+    max_moves: Optional[int] = None  # Maximum moves before stopping (None = no limit)
     max_time: Optional[float] = None  # Maximum time in seconds (None = no limit)
     delta_time: float = 1.0 / 60.0  # Time step per frame (default 60 FPS)
 
