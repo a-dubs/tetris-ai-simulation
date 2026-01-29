@@ -142,18 +142,20 @@ def state_to_features(state: GameState) -> np.ndarray:
     # Active piece features
     if state.active_tetrimino:
         active = state.active_tetrimino
+        active_shape = _get_shape_from_tetrimino(active)
         features.extend([
             float(active.x),
             float(active.y),
             float(_orientation_to_int(active.orientation)),
-            float(_shape_to_int(active.shape)),
+            float(_shape_to_int(active_shape)),
         ])
     else:
         features.extend([0.0, 0.0, 0.0, 0.0])
     
     # Next piece
     if state.next_tetrimino:
-        features.append(float(_shape_to_int(state.next_tetrimino.shape)))
+        next_shape = _get_shape_from_tetrimino(state.next_tetrimino)
+        features.append(float(_shape_to_int(next_shape)))
     else:
         features.append(0.0)
     
@@ -171,6 +173,46 @@ def _orientation_to_int(orientation: str) -> int:
     """Convert orientation string to int."""
     mapping = {"N": 0, "E": 1, "S": 2, "W": 3}
     return mapping.get(orientation, 0)
+
+
+def _get_shape_from_tetrimino(tetrimino) -> str:
+    """Extract shape name from tetrimino by matching minos pattern.
+    
+    Uses the color codes in minos to identify the shape:
+    - 'c' = I (cyan)
+    - 'y' = O (yellow)
+    - 'p' = T (purple)
+    - 'g' = S (green)
+    - 'r' = Z (red)
+    - 'b' = J (blue)
+    - 'o' = L (orange)
+    
+    Args:
+        tetrimino: Tetrimino object
+        
+    Returns:
+        Shape name string
+    """
+    if not tetrimino or not hasattr(tetrimino, 'minos'):
+        return "I"
+    
+    # Find first non-space character in minos
+    for row in tetrimino.minos:
+        for cell in row:
+            if cell != ' ':
+                # Map color code to shape
+                color_to_shape = {
+                    'c': 'I',
+                    'y': 'O',
+                    'p': 'T',
+                    'g': 'S',
+                    'r': 'Z',
+                    'b': 'J',
+                    'o': 'L',
+                }
+                return color_to_shape.get(cell, 'I')
+    
+    return "I"  # Default fallback
 
 
 def _shape_to_int(shape: str) -> int:

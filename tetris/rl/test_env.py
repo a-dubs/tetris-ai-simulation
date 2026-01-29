@@ -117,6 +117,7 @@ def test_reward_calculation():
     print("\nTesting reward calculation...")
     
     try:
+        import numpy as np
         from tetris.core.game_engine import GameEngine
         from tetris.rl.env import calculate_reward
         
