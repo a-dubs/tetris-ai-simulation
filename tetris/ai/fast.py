@@ -61,8 +61,8 @@ class FastAIPlayer(AIPlayer):
             "stack_d_thresh": 15,  # Start penalizing above row 15
             
             # Score rewards (prioritize clears)
-            "score_w": 50.0,  # Reward per line clear (moderate increase from original 15)
-            "tetris_bonus": 100.0,  # Small bonus for 4-line clear (Tetris)
+            "score_w": 100.0,  # Reward per line clear (increased to prioritize clears)
+            "tetris_bonus": 300.0,  # Bonus for 4-line clear (Tetris) - make it attractive
             
             # Game over (very strong penalty)
             "go_w": -1000.0,
@@ -139,7 +139,7 @@ class FastAIPlayer(AIPlayer):
             # Add line clear bonus (not cached)
             clear_bonus = lines_cleared * self.params["score_w"]
             if lines_cleared == 4:
-                clear_bonus += self.params.get("tetris_bonus", 100.0)
+                clear_bonus += self.params.get("tetris_bonus", 300.0)
             return cached_score + clear_bonus
         
         self._cache_misses += 1
@@ -162,14 +162,11 @@ class FastAIPlayer(AIPlayer):
             column_heights.append(max_height)
         a_stacks = sum(column_heights) / float(pfw) if pfw > 0 else 0
         
-        # Count holes (unreachable empty spaces)
-        hole_count, hole_depth_sum = self._count_holes(playfield)
-        
-        # Count wells (deep columns)
-        well_depth_sum = self._count_wells(playfield, column_heights)
-        
-        # Calculate cliff penalties
+        # Calculate cliff penalties (original method - handles hole avoidance)
         cliff_heights_sum, cliff_lengths = self._calculate_cliff_penalties(playfield, pfw, pfh)
+        
+        # Note: Removed explicit hole/well detection to match original heuristic structure
+        # Cliff penalties already handle hole avoidance effectively
         
         # Stack danger (penalize high stacks)
         stack_d_thresh_int = int(self.params["stack_d_thresh"])
@@ -178,43 +175,31 @@ class FastAIPlayer(AIPlayer):
             for row in range(stack_d_thresh_int + 1, pfh)
         ])
         
-        # Build evaluation score
+        # Build evaluation score (matching original TetrisAI structure)
         eval_score = 0
         
-        # Stack height penalties (keep stack low)
+        # Stack height penalties (keep stack low) - original structure
         eval_score += (max_stack_height ** self.params["m_stack_e"]) * self.params["m_stack_w"]
         eval_score += (a_stacks ** self.params["a_stack_e"]) * self.params["a_stack_w"]
         eval_score += stack_danger * self.params["stack_d_w"]
         
-        # Hole penalties (avoid creating unreachable holes)
-        eval_score += hole_count * -10.0  # Base penalty per hole
-        eval_score += hole_depth_sum * -2.0  # Additional penalty for deep holes
-        
-        # Well penalties (avoid deep columns)
-        eval_score += well_depth_sum * -3.0
-        
-        # Cliff penalties
+        # Cliff penalties (original - these handle hole avoidance)
         eval_score += cliff_lengths
         eval_score += cliff_heights_sum
         
-        # Clear rewards (prioritize clears)
+        # Clear rewards (prioritize clears - increased from original)
         eval_score += lines_cleared * self.params["score_w"]
         if lines_cleared == 4:
-            eval_score += self.params.get("tetris_bonus", 100.0)
+            eval_score += self.params.get("tetris_bonus", 200.0)
         
         # Game over penalty (very strong)
         game_over = self._check_game_over(playfield)
         eval_score += int(game_over) * self.params["go_w"]
         
-        # Bonus for keeping stack balanced (lower variance in column heights)
-        if len(column_heights) > 1:
-            height_variance = sum([(h - a_stacks) ** 2 for h in column_heights]) / len(column_heights)
-            eval_score += height_variance * -1.0  # Prefer balanced stacks
-        
         # Cache result (without line clear bonus, since that varies)
         clear_bonus = lines_cleared * self.params["score_w"]
         if lines_cleared == 4:
-            clear_bonus += self.params.get("tetris_bonus", 100.0)
+            clear_bonus += self.params.get("tetris_bonus", 300.0)
         
         if len(self._eval_cache) < 10000:
             self._eval_cache[cache_key] = eval_score - clear_bonus
