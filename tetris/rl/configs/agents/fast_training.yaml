@@ -1,0 +1,26 @@
+# Fast training configuration
+# Smaller batch size and fewer epochs for quicker iteration
+
+algorithm: "PPO"
+policy: "MlpPolicy"
+
+learning_rate: 5.0e-4  # Slightly higher LR for faster learning
+n_steps: 1024          # Fewer steps per update
+batch_size: 32         # Smaller batches
+n_epochs: 5            # Fewer epochs
+gamma: 0.99
+
+policy_kwargs:
+  net_arch:
+    - 32
+    - 32
+  activation_fn: "tanh"
+
+clip_range: 0.2
+ent_coef: 0.02  # Higher entropy for more exploration
+vf_coef: 0.5
+max_grad_norm: 0.5
+
+verbose: 1
+tensorboard_log: "./rl_logs/tensorboard"
+device: "auto"

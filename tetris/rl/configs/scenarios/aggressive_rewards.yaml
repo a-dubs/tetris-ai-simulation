@@ -1,0 +1,31 @@
+# Aggressive reward scenario
+# Higher rewards for line clearing, stronger penalties for mistakes
+
+rewards:
+  line_cleared:
+    single: 200.0    # Doubled
+    double: 600.0
+    triple: 1000.0
+    tetris: 1600.0
+  
+  score_multiplier: 0.02
+  level_up: 100.0
+  
+  # Stronger penalties
+  game_over: -200.0
+  height_threshold: 12      # Lower threshold
+  height_penalty: 4.0       # Stronger penalty
+  hole_penalty: 10.0
+  variance_penalty: 1.0
+
+environment:
+  max_placements: 20
+  feature_normalization:
+    score_divisor: 10000.0
+  render_mode: null
+  render_fps: 10
+
+training:
+  max_steps_per_episode: 10000
+  eval_episodes: 10
+  eval_freq: 10000

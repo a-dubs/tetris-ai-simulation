@@ -38,6 +38,7 @@ except ImportError as e:
 
 from tetris.rl.env import TetrisEnv, TrainingMetrics
 from tetris.rl.visualization import TrainingVisualizer
+from tetris.rl.config import RLConfig, load_config
 
 
 class TrainingCallback:
@@ -93,6 +94,9 @@ def train_agent(
     eval_freq: int = 10_000,
     render_every: int = 100,
     verbose: int = 1,
+    config: Optional[RLConfig] = None,
+    agent_config: Optional[str] = None,
+    scenario_config: Optional[str] = None,
 ):
     """Train RL agent with comprehensive logging and visualization.
     
@@ -154,39 +158,42 @@ def train_agent(
     callbacks = []
     
     # Evaluation callback
+    training_params = config.scenario.get_training_params()
     eval_callback = EvalCallback(
         eval_env,
         best_model_save_path=str(checkpoint_path / "best"),
         log_path=str(log_path / "eval"),
-        eval_freq=eval_freq,
+        eval_freq=training_params.get("eval_freq", eval_freq),
         deterministic=True,
         render=False,
-        verbose=verbose,
+        verbose=config.agent.verbose,
     )
     callbacks.append(eval_callback)
     
     # Checkpoint callback
     checkpoint_callback = CheckpointCallback(
-        save_freq=checkpoint_freq,
+        save_freq=config.checkpoint_freq,
         save_path=str(checkpoint_path),
-        name_prefix=model_name,
-        verbose=verbose,
+        name_prefix=config.model_name,
+        verbose=config.agent.verbose,
     )
     callbacks.append(checkpoint_callback)
     
     callback_list = CallbackList(callbacks)
     
     # Training loop
-    print(f"\nStarting training for {total_timesteps:,} timesteps...")
-    print(f"Checkpoint frequency: {checkpoint_freq:,} timesteps")
-    print(f"Evaluation frequency: {eval_freq:,} timesteps")
-    if render_every > 0:
-        print(f"Rendering every {render_every} episodes")
+    print(f"\nStarting training for {config.total_timesteps:,} timesteps...")
+    print(f"Agent config: {config.agent.algorithm} ({config.agent.policy})")
+    print(f"Scenario: reward-based training")
+    print(f"Checkpoint frequency: {config.checkpoint_freq:,} timesteps")
+    print(f"Evaluation frequency: {training_params.get('eval_freq', eval_freq):,} timesteps")
+    if config.render_every > 0:
+        print(f"Rendering every {config.render_every} episodes")
     print()
     
     try:
         model.learn(
-            total_timesteps=total_timesteps,
+            total_timesteps=config.total_timesteps,
             callback=callback_list,
             progress_bar=True,
         )
@@ -194,7 +201,7 @@ def train_agent(
         print("\nTraining interrupted by user")
     
     # Save final model
-    final_model_path = log_path / f"{model_name}_final"
+    final_model_path = log_path / f"{config.model_name}_final"
     model.save(str(final_model_path))
     print(f"\nFinal model saved to {final_model_path}")
     
@@ -351,10 +358,14 @@ def main():
     train_parser = subparsers.add_parser("train", help="Train RL agent")
     train_parser.add_argument("--timesteps", type=int, default=1_000_000,
                              help="Total training timesteps")
-    train_parser.add_argument("--lr", type=float, default=3e-4,
-                             help="Learning rate")
-    train_parser.add_argument("--batch-size", type=int, default=64,
-                             help="Batch size")
+    train_parser.add_argument("--agent-config", type=str, default=None,
+                             help="Agent config name or path (e.g., 'default', 'large_network')")
+    train_parser.add_argument("--scenario-config", type=str, default=None,
+                             help="Scenario config name or path (e.g., 'default', 'aggressive_rewards')")
+    train_parser.add_argument("--lr", type=float, default=None,
+                             help="Learning rate (overrides config)")
+    train_parser.add_argument("--batch-size", type=int, default=None,
+                             help="Batch size (overrides config)")
     train_parser.add_argument("--model-name", type=str, default="tetris_rl",
                              help="Model name prefix")
     train_parser.add_argument("--log-dir", type=str, default="./rl_logs",
@@ -389,16 +400,23 @@ def main():
         return
     
     if args.command == "train":
-        train_agent(
-            total_timesteps=args.timesteps,
-            learning_rate=args.lr,
-            batch_size=args.batch_size,
-            model_name=args.model_name,
-            log_dir=args.log_dir,
-            checkpoint_freq=args.checkpoint_freq,
-            eval_freq=args.eval_freq,
-            render_every=args.render_every,
-        )
+        train_kwargs = {
+            "total_timesteps": args.timesteps,
+            "agent_config": args.agent_config,
+            "scenario_config": args.scenario_config,
+            "model_name": args.model_name,
+            "log_dir": args.log_dir,
+            "checkpoint_freq": args.checkpoint_freq,
+            "eval_freq": args.eval_freq,
+            "render_every": args.render_every,
+        }
+        # Only add override params if explicitly provided
+        if args.lr is not None:
+            train_kwargs["learning_rate"] = args.lr
+        if args.batch_size is not None:
+            train_kwargs["batch_size"] = args.batch_size
+        
+        train_agent(**train_kwargs)
     elif args.command == "evaluate":
         evaluate_agent(
             model_path=args.model,

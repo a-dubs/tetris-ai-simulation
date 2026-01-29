@@ -183,44 +183,64 @@ def calculate_reward(
     prev_state: GameState,
     current_state: GameState,
     done: bool,
+    reward_params: Optional[Dict[str, Any]] = None,
 ) -> float:
     """Calculate reward for RL agent.
     
-    Reward structure:
-    - Large penalty for game over
-    - Large reward for clearing lines (exponential)
-    - Small reward for score increase
-    - Reward for level progression
-    - Penalties for high stacks, holes, height variance
+    Reward structure is configurable via reward_params. Defaults to standard
+    values if not provided.
     
     Args:
         prev_state: Previous game state
         current_state: Current game state
         done: Whether episode is done
+        reward_params: Optional reward configuration dict
         
     Returns:
         Reward value
     """
+    # Use default reward params if not provided
+    if reward_params is None:
+        reward_params = {
+            "line_cleared": {"single": 100.0, "double": 300.0, "triple": 500.0, "tetris": 800.0},
+            "score_multiplier": 0.01,
+            "level_up": 50.0,
+            "game_over": -100.0,
+            "height_threshold": 15,
+            "height_penalty": 2.0,
+            "hole_penalty": 5.0,
+            "variance_penalty": 0.5,
+            "survival_bonus": 0.0,
+        }
+    
     reward = 0.0
+    
+    # Survival bonus (per step)
+    reward += reward_params.get("survival_bonus", 0.0)
     
     # Game over penalty
     if done:
-        reward -= 100.0
+        reward += reward_params.get("game_over", -100.0)
     
     # Lines cleared (most important!)
     lines_cleared = current_state.lines_cleared - prev_state.lines_cleared
     if lines_cleared > 0:
-        # Exponential reward for multiple lines
-        line_rewards = [100.0, 300.0, 500.0, 800.0]
+        line_rewards_config = reward_params.get("line_cleared", {})
+        line_rewards = [
+            line_rewards_config.get("single", 100.0),
+            line_rewards_config.get("double", 300.0),
+            line_rewards_config.get("triple", 500.0),
+            line_rewards_config.get("tetris", 800.0),
+        ]
         reward += line_rewards[min(lines_cleared - 1, 3)]
     
-    # Score increase (small)
+    # Score increase
     score_delta = current_state.score - prev_state.score
-    reward += score_delta * 0.01
+    reward += score_delta * reward_params.get("score_multiplier", 0.01)
     
     # Level progression
     if current_state.level > prev_state.level:
-        reward += 50.0
+        reward += reward_params.get("level_up", 50.0)
     
     # Shape penalties (encourage good play)
     pf = np.array([
@@ -242,13 +262,16 @@ def calculate_reward(
     if column_heights:
         max_height = max(column_heights)
         height_variance = np.std(column_heights)
+        height_threshold = reward_params.get("height_threshold", 15)
+        height_penalty = reward_params.get("height_penalty", 2.0)
+        variance_penalty = reward_params.get("variance_penalty", 0.5)
         
         # Penalize high stacks
-        if max_height > 15:
-            reward -= (max_height - 15) * 2.0
+        if max_height > height_threshold:
+            reward -= (max_height - height_threshold) * height_penalty
         
         # Penalize height variance (encourage flat playfield)
-        reward -= height_variance * 0.5
+        reward -= height_variance * variance_penalty
     
     # Penalize holes
     holes = 0
@@ -260,7 +283,7 @@ def calculate_reward(
             elif found_block and pf[row, col] == 0:
                 holes += 1
     
-    reward -= holes * 5.0
+    reward -= holes * reward_params.get("hole_penalty", 5.0)
     
     return reward
 
@@ -275,11 +298,12 @@ if GYMNASIUM_AVAILABLE:
         
         metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 10}
         
-        def __init__(self, render_mode: Optional[str] = None):
+        def __init__(self, render_mode: Optional[str] = None, reward_params: Optional[Dict[str, Any]] = None):
             """Initialize Tetris environment.
             
             Args:
                 render_mode: "human" for GUI, "rgb_array" for video, None for headless
+                reward_params: Optional reward configuration dict
             """
             super().__init__()
             
@@ -295,6 +319,7 @@ if GYMNASIUM_AVAILABLE:
             )
             
             self.render_mode = render_mode
+            self.reward_params = reward_params
             self.engine = None
             self.prev_state = None
             self.current_placements = []
@@ -413,8 +438,12 @@ if GYMNASIUM_AVAILABLE:
                     break
             
             # Calculate reward
-            reward = calculate_reward(self.prev_state, self.engine.state, 
-                                     self.engine.state.game_over)
+            reward = calculate_reward(
+                self.prev_state, 
+                self.engine.state, 
+                self.engine.state.game_over,
+                reward_params=self.reward_params
+            )
             
             # Update previous state
             self.prev_state = self.engine.state

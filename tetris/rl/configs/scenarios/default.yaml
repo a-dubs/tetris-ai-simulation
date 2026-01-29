@@ -1,0 +1,44 @@
+# Default scenario configuration
+# Defines reward function parameters and environment settings
+
+# Reward function weights
+rewards:
+  # Line clearing rewards (exponential)
+  line_cleared:
+    single: 100.0
+    double: 300.0
+    triple: 500.0
+    tetris: 800.0
+  
+  # Score and progression
+  score_multiplier: 0.01
+  level_up: 50.0
+  
+  # Penalties
+  game_over: -100.0
+  height_threshold: 15      # Start penalizing above this height
+  height_penalty: 2.0       # Penalty per unit above threshold
+  hole_penalty: 5.0         # Penalty per hole
+  variance_penalty: 0.5     # Penalty for height variance
+
+# Environment settings
+environment:
+  # Action space
+  max_placements: 20  # Maximum number of placements to consider
+  
+  # Observation space
+  feature_normalization:
+    score_divisor: 10000.0  # Normalize score by this value
+  
+  # Rendering
+  render_mode: null  # "human", "rgb_array", or null for headless
+  render_fps: 10
+
+# Training scenario settings
+training:
+  # Episode limits
+  max_steps_per_episode: 10000
+  
+  # Evaluation
+  eval_episodes: 10
+  eval_freq: 10000  # Evaluate every N timesteps

@@ -1,0 +1,34 @@
+# Survival-focused scenario
+# Emphasizes staying alive over high scores
+
+rewards:
+  line_cleared:
+    single: 50.0
+    double: 100.0
+    triple: 150.0
+    tetris: 200.0
+  
+  score_multiplier: 0.001  # Minimal score reward
+  level_up: 10.0
+  
+  # Strong survival incentives
+  game_over: -500.0        # Very strong game over penalty
+  height_threshold: 10     # Low threshold
+  height_penalty: 10.0     # Strong height penalty
+  hole_penalty: 20.0       # Very strong hole penalty
+  variance_penalty: 2.0   # Strong variance penalty
+  
+  # Survival bonus (reward for staying alive)
+  survival_bonus: 0.1      # Small reward per step
+
+environment:
+  max_placements: 20
+  feature_normalization:
+    score_divisor: 10000.0
+  render_mode: null
+  render_fps: 10
+
+training:
+  max_steps_per_episode: 10000
+  eval_episodes: 10
+  eval_freq: 10000

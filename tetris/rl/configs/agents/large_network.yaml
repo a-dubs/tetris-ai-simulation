@@ -1,0 +1,28 @@
+# Large network configuration for more complex learning
+# Uses larger hidden layers for more capacity
+
+algorithm: "PPO"
+policy: "MlpPolicy"
+
+learning_rate: 3.0e-4
+n_steps: 2048
+batch_size: 128
+n_epochs: 10
+gamma: 0.99
+
+# Larger network architecture
+policy_kwargs:
+  net_arch:
+    - 128
+    - 128
+    - 64
+  activation_fn: "tanh"
+
+clip_range: 0.2
+ent_coef: 0.01
+vf_coef: 0.5
+max_grad_norm: 0.5
+
+verbose: 1
+tensorboard_log: "./rl_logs/tensorboard"
+device: "auto"

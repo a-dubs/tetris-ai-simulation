@@ -1,0 +1,31 @@
+# Conservative reward scenario
+# Lower rewards, gentler penalties - encourages steady play
+
+rewards:
+  line_cleared:
+    single: 50.0     # Reduced
+    double: 150.0
+    triple: 250.0
+    tetris: 400.0
+  
+  score_multiplier: 0.005
+  level_up: 25.0
+  
+  # Gentler penalties
+  game_over: -50.0
+  height_threshold: 18      # Higher threshold
+  height_penalty: 1.0       # Weaker penalty
+  hole_penalty: 2.0
+  variance_penalty: 0.25
+
+environment:
+  max_placements: 20
+  feature_normalization:
+    score_divisor: 10000.0
+  render_mode: null
+  render_fps: 10
+
+training:
+  max_steps_per_episode: 10000
+  eval_episodes: 10
+  eval_freq: 10000
