@@ -230,10 +230,18 @@ def train_agent(
     print()
     
     try:
+        # Check if progress bar dependencies are available
+        try:
+            import tqdm
+            import rich
+            progress_bar = True
+        except ImportError:
+            progress_bar = False
+        
         model.learn(
             total_timesteps=config.total_timesteps,
             callback=callback_list,
-            progress_bar=True,
+            progress_bar=progress_bar,
         )
     except KeyboardInterrupt:
         print("\nTraining interrupted by user")
