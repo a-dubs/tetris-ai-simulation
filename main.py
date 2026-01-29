@@ -20,7 +20,25 @@ def _apply_seed(seed: int | None):
 
 def run_game(args):
     """Run a single game simulation."""
+    from pathlib import Path
+    
     _apply_seed(args.seed)
+    
+    # Load params from file if provided
+    ai_params = None
+    if args.params_file:
+        params_path = Path(args.params_file)
+        if not params_path.exists():
+            raise FileNotFoundError(f"Params file not found: {args.params_file}")
+        with open(params_path, "r") as f:
+            params_data = json.load(f)
+            # Support both direct params dict and wrapped format
+            if "params" in params_data:
+                ai_params = {"params": params_data["params"]}
+            else:
+                ai_params = {"params": params_data}
+        print(f"Loaded AI params from: {args.params_file}")
+    
     config = SimulationConfig(
         ai_type=args.ai,
         headless=args.headless,
@@ -29,6 +47,7 @@ def run_game(args):
         initial_level=args.level,
         moves_per_second=args.mps,
         render_delay=args.render_delay,
+        ai_params=ai_params,
     )
 
     engine = GameEngine()
@@ -38,7 +57,8 @@ def run_game(args):
     sim = Simulator(engine, ai, renderer, config)
 
     print(f"Starting simulation with {config.ai_type} AI...")
-    print(f"Max moves: {config.max_moves}")
+    if config.max_moves:
+        print(f"Max moves: {config.max_moves}")
     if config.max_time:
         print(f"Max time: {config.max_time}s")
     print()
@@ -79,6 +99,9 @@ def _run_single_simulation(config: SimulationConfig) -> tuple:
 
 def run_benchmark(args):
     """Run multiple headless simulations and summarize results."""
+    import json
+    from pathlib import Path
+    
     ai_types = args.ai or ["random"]
     runs = args.runs
     if runs <= 0:
@@ -91,6 +114,23 @@ def run_benchmark(args):
         print(f"Benchmark runs: {runs}")
         print()
 
+    # Load params from file if provided
+    ai_params = None
+    if args.params_file:
+        params_path = Path(args.params_file)
+        if not params_path.exists():
+            raise FileNotFoundError(f"Params file not found: {args.params_file}")
+        with open(params_path, "r") as f:
+            params_data = json.load(f)
+            # Support both direct params dict and wrapped format
+            if "params" in params_data:
+                ai_params = {"params": params_data["params"]}
+            else:
+                ai_params = {"params": params_data}
+        if output_mode == "text":
+            print(f"Loaded AI params from: {args.params_file}")
+            print()
+
     summary_payload = {
         "runs": runs,
         "max_moves": args.max_moves,
@@ -98,6 +138,7 @@ def run_benchmark(args):
         "level": args.level,
         "mps": args.mps,
         "seed": args.seed,
+        "params_file": args.params_file,
         "ais": [],
     }
 
@@ -116,6 +157,7 @@ def run_benchmark(args):
                 initial_level=args.level,
                 moves_per_second=args.mps,
                 render_delay=0.0,
+                ai_params=ai_params,
             )
 
             result = _run_single_simulation(config)
@@ -268,8 +310,8 @@ Examples:
     run_parser.add_argument(
         "--max-moves",
         type=int,
-        default=10000,
-        help="Maximum moves before stopping (default: 10000)",
+        default=None,
+        help="Maximum moves before stopping (default: no limit, runs until game over)",
     )
     run_parser.add_argument(
         "--max-time",
@@ -294,6 +336,12 @@ Examples:
         type=float,
         default=0.05,
         help="Delay between renders in seconds for GUI (default: 0.05)",
+    )
+    run_parser.add_argument(
+        "--params-file",
+        type=str,
+        default=None,
+        help="JSON file containing AI parameters (for fast/greedy AI)",
     )
 
     # Train command
@@ -366,6 +414,12 @@ Examples:
         type=int,
         default=4,
         help="Moves per second (default: 4)",
+    )
+    bench_parser.add_argument(
+        "--params-file",
+        type=str,
+        default=None,
+        help="JSON file containing AI parameters (for fast/greedy AI)",
     )
 
     args = parser.parse_args()

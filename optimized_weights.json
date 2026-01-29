@@ -1,0 +1,23 @@
+{
+  "params": {
+    "m_stack_w": -2.5959229321387767,
+    "m_stack_e": 3.0,
+    "a_stack_w": -7.610654617792075,
+    "a_stack_e": 1.179149482820371,
+    "cliff_l_w": -3.31115746368346,
+    "cliff_l_e": 3.0,
+    "cliff_h_w": -6.655895441321394,
+    "cliff_h_e": 2.823318148968611,
+    "stack_d_w": -1.0,
+    "stack_d_e": 0.5,
+    "stack_d_thresh": 10,
+    "score_w": 50.0,
+    "tetris_bonus": 100.0,
+    "go_w": -2000.0
+  },
+  "fitness": 3.62526,
+  "avg_score": 52700,
+  "avg_lines": 107.2,
+  "avg_moves": 1326.6,
+  "num_games": 10
+}
