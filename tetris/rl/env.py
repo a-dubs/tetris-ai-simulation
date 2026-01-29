@@ -103,8 +103,9 @@ def state_to_features(state: GameState) -> np.ndarray:
         for row in state.playfield
     ], dtype=np.float32)
     
-    # Column heights (10 features)
+    # Column heights (10 features) - NORMALIZED to [0, 1]
     column_heights = []
+    max_possible_height = TOTAL_PLAYFIELD_HEIGHT
     for col in range(PLAYFIELD_WIDTH):
         col_data = pf[:, col]
         filled_rows = np.where(col_data == 1)[0]
@@ -113,21 +114,24 @@ def state_to_features(state: GameState) -> np.ndarray:
             height = TOTAL_PLAYFIELD_HEIGHT - np.min(filled_rows)
         else:
             height = 0.0
-        column_heights.append(height)
+        # Normalize to [0, 1]
+        column_heights.append(height / max_possible_height)
     
     features.extend(column_heights)
     
-    # Aggregate statistics
+    # Aggregate statistics (normalized)
     if column_heights:
-        features.append(np.mean(column_heights))  # Average height
-        features.append(np.max(column_heights))    # Max height
-        features.append(np.std(column_heights))    # Height variance
+        features.append(np.mean(column_heights))  # Average height (already normalized)
+        features.append(np.max(column_heights))    # Max height (already normalized)
+        features.append(np.std(column_heights))    # Height variance (normalized)
     else:
         features.extend([0.0, 0.0, 0.0])
     
-    features.append(np.sum(pf))  # Total blocks
+    # Total blocks (normalized by max possible blocks)
+    max_blocks = PLAYFIELD_WIDTH * TOTAL_PLAYFIELD_HEIGHT
+    features.append(np.sum(pf) / max_blocks)
     
-    # Count holes (empty cells with blocks above)
+    # Count holes (empty cells with blocks above) - NORMALIZED
     holes = 0
     for col in range(PLAYFIELD_WIDTH):
         found_block = False
@@ -137,33 +141,50 @@ def state_to_features(state: GameState) -> np.ndarray:
             elif found_block and pf[row, col] == 0:
                 holes += 1
     
-    features.append(float(holes))
+    # Normalize holes by max possible (rough estimate: width * height / 2)
+    max_holes = PLAYFIELD_WIDTH * TOTAL_PLAYFIELD_HEIGHT // 2
+    features.append(float(holes) / max_holes if max_holes > 0 else 0.0)
     
-    # Active piece features
+    # Active piece features - NORMALIZED
     if state.active_tetrimino:
         active = state.active_tetrimino
         active_shape = _get_shape_from_tetrimino(active)
+        # Normalize x to [0, 1] (x is 1-indexed, range is roughly 0-10)
+        normalized_x = active.x / PLAYFIELD_WIDTH if PLAYFIELD_WIDTH > 0 else 0.0
+        # Normalize y to [0, 1]
+        normalized_y = active.y / TOTAL_PLAYFIELD_HEIGHT if TOTAL_PLAYFIELD_HEIGHT > 0 else 0.0
+        # Orientation is already 0-3, normalize to [0, 1]
+        normalized_orientation = _orientation_to_int(active.orientation) / 4.0
+        # Shape is already 0-6, normalize to [0, 1]
+        normalized_shape = _shape_to_int(active_shape) / 7.0
         features.extend([
-            float(active.x),
-            float(active.y),
-            float(_orientation_to_int(active.orientation)),
-            float(_shape_to_int(active_shape)),
+            normalized_x,
+            normalized_y,
+            normalized_orientation,
+            normalized_shape,
         ])
     else:
         features.extend([0.0, 0.0, 0.0, 0.0])
     
-    # Next piece
+    # Next piece - NORMALIZED
     if state.next_tetrimino:
         next_shape = _get_shape_from_tetrimino(state.next_tetrimino)
-        features.append(float(_shape_to_int(next_shape)))
+        normalized_next_shape = _shape_to_int(next_shape) / 7.0
+        features.append(normalized_next_shape)
     else:
         features.append(0.0)
     
     # Game progress (normalized)
+    # Level: normalize by assuming max level ~30
+    normalized_level = min(float(state.level) / 30.0, 1.0)
+    # Lines cleared: normalize by assuming max ~1000 lines
+    normalized_lines = min(float(state.lines_cleared) / 1000.0, 1.0)
+    # Score: already normalized
+    normalized_score = float(state.score) / 10000.0
     features.extend([
-        float(state.level),
-        float(state.lines_cleared),
-        float(state.score) / 10000.0,  # Normalize score
+        normalized_level,
+        normalized_lines,
+        normalized_score,
     ])
     
     return np.array(features, dtype=np.float32)
@@ -229,8 +250,9 @@ def calculate_reward(
 ) -> float:
     """Calculate reward for RL agent.
     
-    Reward structure is configurable via reward_params. Defaults to standard
-    values if not provided.
+    Reward structure is configurable via reward_params. Defaults to improved
+    values matching fast.py AI philosophy: strong penalties for bad play,
+    strong rewards for clears.
     
     Args:
         prev_state: Previous game state
@@ -241,13 +263,28 @@ def calculate_reward(
     Returns:
         Reward value
     """
-    # Use default reward params if not provided
+    # Use improved default reward params matching fast.py AI
     if reward_params is None:
         reward_params = {
             "line_cleared": {"single": 100.0, "double": 300.0, "triple": 500.0, "tetris": 800.0},
+            "tetris_bonus": 300.0,  # Extra bonus for 4-line clear
             "score_multiplier": 0.01,
             "level_up": 50.0,
-            "game_over": -100.0,
+            "game_over": -1000.0,  # Much stronger penalty (was -100)
+            # Stack height penalties (exponential like fast.py)
+            "max_stack_weight": -8.0,  # Strong penalty for max height
+            "max_stack_exponent": 1.5,
+            "avg_stack_weight": -5.0,  # Penalty for average height
+            "avg_stack_exponent": 1.2,
+            "stack_danger_weight": -4.0,  # Penalty for dangerous heights
+            "stack_danger_threshold": 15,
+            "stack_danger_exponent": 1.2,
+            # Cliff penalties (better than simple hole counting)
+            "cliff_horizontal_weight": -6.0,
+            "cliff_horizontal_exponent": 1.3,
+            "cliff_vertical_weight": -7.0,  # Strong penalty for vertical cliffs (holes)
+            "cliff_vertical_exponent": 1.5,
+            # Legacy parameters (kept for compatibility)
             "height_threshold": 15,
             "height_penalty": 2.0,
             "hole_penalty": 5.0,
@@ -257,12 +294,12 @@ def calculate_reward(
     
     reward = 0.0
     
-    # Survival bonus (per step)
+    # Survival bonus (per step) - usually 0
     reward += reward_params.get("survival_bonus", 0.0)
     
-    # Game over penalty
+    # Game over penalty (VERY STRONG - matching fast.py)
     if done:
-        reward += reward_params.get("game_over", -100.0)
+        reward += reward_params.get("game_over", -1000.0)
     
     # Lines cleared (most important!)
     lines_cleared = current_state.lines_cleared - prev_state.lines_cleared
@@ -275,6 +312,9 @@ def calculate_reward(
             line_rewards_config.get("tetris", 800.0),
         ]
         reward += line_rewards[min(lines_cleared - 1, 3)]
+        # Extra bonus for Tetris (4-line clear)
+        if lines_cleared == 4:
+            reward += reward_params.get("tetris_bonus", 300.0)
     
     # Score increase
     score_delta = current_state.score - prev_state.score
@@ -284,50 +324,140 @@ def calculate_reward(
     if current_state.level > prev_state.level:
         reward += reward_params.get("level_up", 50.0)
     
-    # Shape penalties (encourage good play)
+    # Convert playfield to numpy array for analysis
     pf = np.array([
         [1 if cell != ' ' else 0 for cell in row] 
         for row in current_state.playfield
     ])
+    pfw = PLAYFIELD_WIDTH
+    pfh = TOTAL_PLAYFIELD_HEIGHT
     
-    # Column heights
+    # Calculate column heights
     column_heights = []
-    for col in range(PLAYFIELD_WIDTH):
+    for col in range(pfw):
         col_data = pf[:, col]
         filled_rows = np.where(col_data == 1)[0]
         if len(filled_rows) > 0:
-            height = TOTAL_PLAYFIELD_HEIGHT - np.min(filled_rows)
+            height = pfh - np.min(filled_rows)
         else:
             height = 0.0
         column_heights.append(height)
     
     if column_heights:
         max_height = max(column_heights)
-        height_variance = np.std(column_heights)
-        height_threshold = reward_params.get("height_threshold", 15)
-        height_penalty = reward_params.get("height_penalty", 2.0)
-        variance_penalty = reward_params.get("variance_penalty", 0.5)
+        avg_height = sum(column_heights) / len(column_heights)
         
-        # Penalize high stacks
-        if max_height > height_threshold:
-            reward -= (max_height - height_threshold) * height_penalty
+        # Exponential stack height penalties (matching fast.py)
+        # Scale down to prevent reward explosion
+        max_stack_w = reward_params.get("max_stack_weight", -8.0) * 0.1  # Scale down
+        max_stack_e = reward_params.get("max_stack_exponent", 1.5)
+        # Normalize height before exponentiation to keep rewards reasonable
+        normalized_max_height = max_height / TOTAL_PLAYFIELD_HEIGHT
+        reward += (normalized_max_height ** max_stack_e) * max_stack_w * 100
         
-        # Penalize height variance (encourage flat playfield)
-        reward -= height_variance * variance_penalty
-    
-    # Penalize holes
-    holes = 0
-    for col in range(PLAYFIELD_WIDTH):
-        found_block = False
-        for row in range(TOTAL_PLAYFIELD_HEIGHT - 1, -1, -1):
-            if pf[row, col] == 1:
-                found_block = True
-            elif found_block and pf[row, col] == 0:
-                holes += 1
-    
-    reward -= holes * reward_params.get("hole_penalty", 5.0)
+        avg_stack_w = reward_params.get("avg_stack_weight", -5.0) * 0.1  # Scale down
+        avg_stack_e = reward_params.get("avg_stack_exponent", 1.2)
+        normalized_avg_height = avg_height / TOTAL_PLAYFIELD_HEIGHT
+        reward += (normalized_avg_height ** avg_stack_e) * avg_stack_w * 100
+        
+        # Stack danger penalty (for heights above threshold)
+        stack_d_thresh = reward_params.get("stack_danger_threshold", 15)
+        stack_d_w = reward_params.get("stack_danger_weight", -4.0) * 0.1  # Scale down
+        stack_d_e = reward_params.get("stack_danger_exponent", 1.2)
+        
+        # Count dangerous rows (rows above threshold with blocks)
+        row_empty_counts = [row.count(" ") for row in current_state.playfield]
+        stack_danger = sum([
+            int(row_empty_counts[row] < pfw) * ((row - stack_d_thresh) ** stack_d_e)
+            for row in range(stack_d_thresh + 1, pfh)
+        ])
+        reward += stack_danger * stack_d_w * 10  # Scale down
+        
+        # Calculate cliff penalties (better hole/cliff detection)
+        cliff_h_sum, cliff_l_sum = _calculate_cliff_penalties(
+            pf, pfw, pfh, reward_params
+        )
+        reward += cliff_h_sum + cliff_l_sum
     
     return reward
+
+
+def _calculate_cliff_penalties(
+    pf: np.ndarray,
+    pfw: int,
+    pfh: int,
+    reward_params: Dict[str, Any],
+) -> tuple[float, float]:
+    """Calculate cliff penalties (horizontal and vertical).
+    
+    Cliffs are overhangs that create holes. This is better than simple
+    hole counting because it detects the structure that creates holes.
+    
+    Args:
+        pf: Playfield as numpy array (1 = block, 0 = empty)
+        pfw: Playfield width
+        pfh: Playfield height
+        reward_params: Reward configuration dict
+        
+    Returns:
+        Tuple of (cliff_heights_sum, cliff_lengths_sum)
+    """
+    # Scale down cliff penalties to prevent reward explosion
+    cliff_h_w = reward_params.get("cliff_vertical_weight", -7.0) * 0.1
+    cliff_h_e = reward_params.get("cliff_vertical_exponent", 1.5)
+    cliff_l_w = reward_params.get("cliff_horizontal_weight", -6.0) * 0.1
+    cliff_l_e = reward_params.get("cliff_horizontal_exponent", 1.3)
+    
+    # Detect cliffs (horizontal overhangs)
+    # A cliff is when a block exists in current row but not in row above
+    cliffs = np.zeros((pfh - 1, pfw), dtype=int)
+    for row in range(1, pfh):
+        for col in range(pfw):
+            # Cliff if current row has block but row above doesn't
+            if pf[row, col] == 1 and pf[row - 1, col] == 0:
+                cliffs[row - 1, col] = 1
+    
+    # Calculate cliff heights (vertical - depth of holes created)
+    cliff_heights_sum = 0.0
+    for col in range(pfw):
+        prev_row = -1
+        for row in range(pfh - 2, -1, -1):
+            if cliffs[row, col] == 1 and prev_row == -1:
+                prev_row = row
+            elif pf[row, col] == 1 and prev_row != -1:
+                # Found bottom of cliff, calculate depth
+                depth = prev_row - row
+                # Normalize depth before exponentiation
+                normalized_depth = depth / pfh
+                cliff_heights_sum += (normalized_depth ** cliff_h_e) * cliff_h_w * 100
+                prev_row = -1
+            elif row == 0 and prev_row != -1 and pf[row, col] == 0:
+                # Cliff extends to top
+                depth = prev_row - row + 1
+                normalized_depth = depth / pfh
+                cliff_heights_sum += (normalized_depth ** cliff_h_e) * cliff_h_w * 100
+    
+    # Calculate cliff lengths (horizontal - width of overhangs)
+    cliff_lengths_sum = 0.0
+    for row in range(pfh - 1):
+        prev_i = -1
+        for i in range(pfw):
+            if cliffs[row, i] > 0 and prev_i == -1:
+                prev_i = i
+            elif cliffs[row, i] == 0 and prev_i != -1:
+                # End of cliff segment
+                length = i - prev_i
+                # Normalize length before exponentiation
+                normalized_length = length / pfw
+                cliff_lengths_sum += (normalized_length ** cliff_l_e) * cliff_l_w * 100
+                prev_i = -1
+            elif i == pfw - 1 and prev_i != -1 and cliffs[row, i] > 0:
+                # Cliff extends to edge
+                length = i - prev_i + 1
+                normalized_length = length / pfw
+                cliff_lengths_sum += (normalized_length ** cliff_l_e) * cliff_l_w * 100
+    
+    return cliff_heights_sum, cliff_lengths_sum
 
 
 if GYMNASIUM_AVAILABLE:
@@ -405,15 +535,20 @@ if GYMNASIUM_AVAILABLE:
                     self.engine.state, self.engine
                 )
             
-            # Handle invalid action
-            if not self.current_placements or action >= len(self.current_placements):
-                # End episode with penalty
+            # Handle invalid action - wrap to valid range instead of ending episode
+            if not self.current_placements:
+                # No placements available (shouldn't happen, but handle gracefully)
                 obs = self._get_obs()
-                reward = -100.0
-                done = True
+                reward = -10.0  # Small penalty, don't end episode
+                done = self.engine.state.game_over
                 truncated = False
                 info = self._get_info()
                 return obs, reward, done, truncated, info
+            
+            # Wrap invalid actions to valid range (modulo)
+            # This prevents episodes from ending prematurely due to exploration
+            if action >= len(self.current_placements):
+                action = action % len(self.current_placements)
             
             # Execute chosen placement
             placement = self.current_placements[action]

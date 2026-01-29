@@ -16,6 +16,7 @@ Usage:
 
 import argparse
 import sys
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -347,6 +348,7 @@ def visualize_agent(
     model_path: str,
     num_episodes: int = 3,
     deterministic: bool = True,
+    delay: float = 0.1,
 ):
     """Visualize agent playing Tetris.
     
@@ -354,6 +356,7 @@ def visualize_agent(
         model_path: Path to saved model
         num_episodes: Number of episodes to visualize
         deterministic: Use deterministic policy
+        delay: Delay in seconds between each step (for human viewing)
     """
     if not RL_AVAILABLE:
         print("Error: RL dependencies not available")
@@ -367,6 +370,7 @@ def visualize_agent(
     env = TetrisEnv(render_mode="human")
     
     print(f"\nVisualizing {num_episodes} episodes...")
+    print(f"Step delay: {delay:.2f} seconds")
     print("Close window or press ESC to skip episode")
     
     for episode in range(num_episodes):
@@ -383,6 +387,10 @@ def visualize_agent(
             action, _ = model.predict(obs, deterministic=deterministic)
             obs, reward, done, truncated, info = env.step(action)
             total_reward += reward
+            
+            # Add delay for human viewing
+            if delay > 0:
+                time.sleep(delay)
         
         if env.renderer and env.renderer.is_running():
             print(f"Episode complete: Score={info['score']:,}, "
@@ -438,6 +446,8 @@ def main():
                             help="Path to model file")
     viz_parser.add_argument("--episodes", type=int, default=3,
                             help="Number of episodes")
+    viz_parser.add_argument("--delay", type=float, default=0.1,
+                            help="Delay in seconds between each step (default: 0.1)")
     
     args = parser.parse_args()
     
@@ -473,6 +483,7 @@ def main():
         visualize_agent(
             model_path=args.model,
             num_episodes=args.episodes,
+            delay=args.delay,
         )
 
 

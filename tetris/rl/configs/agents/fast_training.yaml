@@ -4,20 +4,21 @@
 algorithm: "PPO"
 policy: "MlpPolicy"
 
-learning_rate: 5.0e-4  # Slightly higher LR for faster learning
-n_steps: 1024          # Fewer steps per update
-batch_size: 32         # Smaller batches
-n_epochs: 5            # Fewer epochs
+learning_rate: 3.0e-4  # Standard LR for stability
+n_steps: 2048          # More steps per update for better learning
+batch_size: 64         # Standard batch size
+n_epochs: 10           # More epochs for better learning
 gamma: 0.99
 
 policy_kwargs:
   net_arch:
-    - 32
+    - 64
+    - 64
     - 32
   activation_fn: "tanh"
 
 clip_range: 0.2
-ent_coef: 0.02  # Higher entropy for more exploration
+ent_coef: 0.01  # Standard entropy for balanced exploration
 vf_coef: 0.5
 max_grad_norm: 0.5
 

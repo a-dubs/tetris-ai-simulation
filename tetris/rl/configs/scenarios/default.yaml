@@ -1,5 +1,6 @@
 # Default scenario configuration
 # Defines reward function parameters and environment settings
+# Improved rewards matching fast.py AI philosophy: strong penalties for bad play
 
 # Reward function weights
 rewards:
@@ -9,17 +10,36 @@ rewards:
     double: 300.0
     triple: 500.0
     tetris: 800.0
+  tetris_bonus: 300.0  # Extra bonus for 4-line clear
   
   # Score and progression
   score_multiplier: 0.01
   level_up: 50.0
   
-  # Penalties
-  game_over: -100.0
-  height_threshold: 15      # Start penalizing above this height
-  height_penalty: 2.0       # Penalty per unit above threshold
-  hole_penalty: 5.0         # Penalty per hole
-  variance_penalty: 0.5     # Penalty for height variance
+  # Game over (VERY STRONG penalty - matching fast.py)
+  game_over: -1000.0
+  
+  # Stack height penalties (exponential - penalize ALL heights, not just above threshold)
+  max_stack_weight: -8.0      # Strong penalty for max height
+  max_stack_exponent: 1.5
+  avg_stack_weight: -5.0      # Penalty for average height
+  avg_stack_exponent: 1.2
+  stack_danger_weight: -4.0   # Extra penalty for dangerous heights
+  stack_danger_threshold: 15   # Start extra penalty above this
+  stack_danger_exponent: 1.2
+  
+  # Cliff penalties (better than simple hole counting - detects structure)
+  cliff_horizontal_weight: -6.0      # Penalty for horizontal overhangs
+  cliff_horizontal_exponent: 1.3
+  cliff_vertical_weight: -7.0        # Strong penalty for vertical cliffs (holes)
+  cliff_vertical_exponent: 1.5
+  
+  # Legacy parameters (kept for compatibility, but improved rewards take precedence)
+  height_threshold: 15
+  height_penalty: 2.0
+  hole_penalty: 5.0
+  variance_penalty: 0.5
+  survival_bonus: 0.0
 
 # Environment settings
 environment:
