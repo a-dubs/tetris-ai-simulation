@@ -300,6 +300,44 @@ def vector_to_params(vector: np.ndarray, bounds: WeightBounds) -> Dict[str, Any]
     return params
 
 
+def format_progress_stats(history: List[Dict], window: Optional[int] = None) -> str:
+    """Format progress statistics for display.
+    
+    Args:
+        history: List of evaluation history dicts with 'avg_score', 'avg_lines', 'fitness'
+        window: If provided, only use last N evaluations. If None, use all.
+        
+    Returns:
+        Formatted string with min/avg/median/max stats
+    """
+    if not history:
+        return "No data"
+    
+    if window is None:
+        recent = history
+    else:
+        # Use last N items, but don't exceed history length
+        recent = history[-min(window, len(history)):]
+    
+    scores = [h["avg_score"] for h in recent]
+    lines = [h["avg_lines"] for h in recent]
+    fitnesses = [h["fitness"] for h in recent]
+    
+    def stats_str(values: List[float], name: str) -> str:
+        if not values:
+            return f"{name}: N/A"
+        return (f"{name}: min={min(values):.0f}, "
+                f"avg={statistics.mean(values):.0f}, "
+                f"med={statistics.median(values):.0f}, "
+                f"max={max(values):.0f}")
+    
+    score_str = stats_str(scores, "Score")
+    lines_str = stats_str(lines, "Lines")
+    fitness_str = stats_str(fitnesses, "Fitness")
+    
+    return f"{score_str} | {lines_str} | {fitness_str}"
+
+
 # ============================================================================
 # Evolutionary Strategy (CMA-ES)
 # ============================================================================
@@ -363,6 +401,7 @@ def optimize_evolutionary(
     best_result = None
     best_fitness = float("-inf")
     history = []
+    generation_history = []  # Track evaluations per generation
     perf_log = {
         "total_eval_times": [],
         "vector_times": [],
@@ -375,7 +414,7 @@ def optimize_evolutionary(
     
     def objective(x: np.ndarray) -> float:
         """Objective function: negative fitness (CMA-ES minimizes)."""
-        nonlocal best_result, best_fitness, eval_count
+        nonlocal best_result, best_fitness, eval_count, generation_history
         
         eval_start = time.perf_counter()
         eval_count += 1
@@ -388,9 +427,14 @@ def optimize_evolutionary(
         eval_weights_start = time.perf_counter()
         # Create fresh perf_log for this evaluation to avoid overwriting
         eval_perf_log = {}
-        # Use different seed for each evaluation (seed + eval_count)
-        # This ensures each evaluation uses different piece sequences
-        eval_seed = seed + eval_count
+        
+        # Calculate generation number (1-indexed)
+        # All members in the same generation use the SAME base seed
+        # This ensures fair comparison - differences are due to weights, not luck
+        generation_num = (eval_count - 1) // population_size + 1
+        # Each generation uses a different seed range to avoid overfitting
+        # Multiply by games_per_run to ensure no overlap between generations
+        eval_seed = seed + (generation_num - 1) * games_per_run
         result = evaluate_weights(params, num_games=games_per_run, seed=eval_seed, perf_log=eval_perf_log)
         eval_weights_time = time.perf_counter() - eval_weights_start
         perf_log["eval_weights_times"].append(eval_weights_time)
@@ -417,15 +461,40 @@ def optimize_evolutionary(
             "eval_time": total_eval_time,
         })
         
+        # Track evaluations in current generation
+        generation_history.append({
+            "fitness": fitness,
+            "avg_score": result.avg_score,
+            "avg_lines": result.avg_lines,
+        })
+        
         # Track best
         if fitness > best_fitness:
             best_fitness = fitness
             best_result = result
         
-        # Log progress every 50 evaluations (less verbose)
-        if eval_count % 50 == 0:
-            avg_eval_time = statistics.mean([h["eval_time"] for h in history[-50:]])
-            print(f"  [Progress] Eval #{eval_count}: avg_time={avg_eval_time:.3f}s per evaluation")
+        # Log progress after each generation completes (when all population evaluated)
+        generation_num = (eval_count - 1) // population_size + 1
+        if eval_count % population_size == 0:
+            # Generation complete - show stats for this generation
+            gen_stats = format_progress_stats(generation_history, window=None)
+            avg_eval_time = statistics.mean([h["eval_time"] for h in history[-population_size:]])
+            
+            # Find best in this generation
+            gen_best_fitness = max([h["fitness"] for h in generation_history])
+            gen_best_idx = next(i for i, h in enumerate(generation_history) if h["fitness"] == gen_best_fitness)
+            gen_best_score = generation_history[gen_best_idx]["avg_score"]
+            gen_best_lines = generation_history[gen_best_idx]["avg_lines"]
+            
+            print(f"  [Gen {generation_num}/{num_runs}] "
+                  f"Best this gen: fitness={gen_best_fitness:.4f}, "
+                  f"score={gen_best_score:.0f}, lines={gen_best_lines:.1f} | "
+                  f"Overall best: fitness={best_fitness:.4f} | "
+                  f"Gen stats ({population_size} evals): {gen_stats} | "
+                  f"avg_time={avg_eval_time:.3f}s")
+            
+            # Reset generation history for next generation
+            generation_history = []
         
         return -fitness  # Minimize negative fitness
     
@@ -451,6 +520,24 @@ def optimize_evolutionary(
     es = cma.CMAEvolutionStrategy(x0, sigma0, options)
     es.optimize(objective)
     cma_total_time = time.perf_counter() - cma_start_time
+    
+    # Report final generation if it didn't complete exactly
+    if generation_history:
+        generation_num = (eval_count - 1) // population_size + 1
+        gen_stats = format_progress_stats(generation_history, window=None)
+        avg_eval_time = statistics.mean([h["eval_time"] for h in history[-len(generation_history):]])
+        
+        gen_best_fitness = max([h["fitness"] for h in generation_history])
+        gen_best_idx = next(i for i, h in enumerate(generation_history) if h["fitness"] == gen_best_fitness)
+        gen_best_score = generation_history[gen_best_idx]["avg_score"]
+        gen_best_lines = generation_history[gen_best_idx]["avg_lines"]
+        
+        print(f"  [Gen {generation_num}/{num_runs}] "
+              f"Best this gen: fitness={gen_best_fitness:.4f}, "
+              f"score={gen_best_score:.0f}, lines={gen_best_lines:.1f} | "
+              f"Overall best: fitness={best_fitness:.4f} | "
+              f"Gen stats ({len(generation_history)} evals): {gen_stats} | "
+              f"avg_time={avg_eval_time:.3f}s")
     
     print(f"\nOptimization complete!")
     print(f"Best fitness: {best_fitness:.4f}")
@@ -571,9 +658,10 @@ def optimize_bayesian(
         """Objective function: negative fitness."""
         nonlocal best_result, best_fitness, iter_count
         
-        # Use different seed for each iteration (seed + iter_count)
-        # This ensures each iteration evaluates with different piece sequences
-        eval_seed = seed + iter_count
+        # Use different seed for each iteration, spaced by games_per_iter
+        # This ensures each game across all iterations has a unique seed
+        # Iteration 0: seeds 0..19, Iteration 1: seeds 20..39, etc.
+        eval_seed = seed + iter_count * games_per_iter
         iter_count += 1
         result = evaluate_weights(params, num_games=games_per_iter, seed=eval_seed)
         fitness = result.fitness(robust=True)
@@ -589,6 +677,13 @@ def optimize_bayesian(
         if fitness > best_fitness:
             best_fitness = fitness
             best_result = result
+        
+        # Log progress every iteration with detailed stats
+        iter_num = len(history)
+        window = min(5, iter_num)
+        stats = format_progress_stats(history, window=window)
+        print(f"  [Iter {iter_num}/{num_iterations}] Best fitness: {best_fitness:.4f} | "
+              f"Recent ({window} iters): {stats}")
         
         return -fitness  # Minimize negative fitness
     
@@ -738,10 +833,10 @@ def optimize_meta_rl(
             
             # Play full game(s) with these weights
             # No weight changes during gameplay - weights are fixed for entire game(s)
-            # Use different seed for each episode (seed + episode_count)
-            # This ensures each episode evaluates with different piece sequences
+            # Use different seed for each episode, spaced by games_per_eval
+            # This ensures each game across all episodes has a unique seed
             # Note: seed is captured from outer scope
-            episode_seed = seed + self.episode_count
+            episode_seed = seed + self.episode_count * games_per_eval
             result = evaluate_weights(
                 new_params, num_games=games_per_eval, seed=episode_seed, headless=True
             )
@@ -815,18 +910,38 @@ def optimize_meta_rl(
     # Track best during training
     best_params = None
     best_fitness = float("-inf")
+    meta_rl_history = []
+    episode_count = 0
     
     def track_best_callback(locals_, globals_):
         """Callback to track best weights during training."""
-        nonlocal best_params, best_fitness
+        nonlocal best_params, best_fitness, meta_rl_history, episode_count
         
         if "infos" in locals_:
             for info in locals_["infos"]:
                 if info and "params" in info:
                     fitness = info.get("fitness", 0.0)
+                    avg_score = info.get("avg_score", 0.0)
+                    avg_lines = info.get("avg_lines", 0.0)
+                    
+                    meta_rl_history.append({
+                        "iteration": episode_count,
+                        "fitness": fitness,
+                        "avg_score": avg_score,
+                        "avg_lines": avg_lines,
+                    })
+                    episode_count += 1
+                    
                     if fitness > best_fitness:
                         best_fitness = fitness
                         best_params = info["params"].copy()
+                    
+                    # Log progress every 10 episodes
+                    if episode_count % 10 == 0:
+                        window = min(10, len(meta_rl_history))
+                        stats = format_progress_stats(meta_rl_history, window=window)
+                        print(f"  [Episode {episode_count}] Best fitness: {best_fitness:.4f} | "
+                              f"Recent ({window} eps): {stats}")
         return True
     
     # Train
