@@ -5,7 +5,6 @@
 # #==================================================================================================================# #
 from tetrimino import Tetrimino
 import random
-import numpy as np
 from copy import copy, deepcopy
 from time import time
 
@@ -78,7 +77,8 @@ class TetrisAI:
             self.params = {
                 self.param_labels[i] : param_weights[i] for i in range(len(self.param_labels))
             }
-        self.params = params
+        else:
+            self.params = params
     
     @staticmethod   
     def game_over(pf):
@@ -141,7 +141,9 @@ class TetrisAI:
     def greedy_heuristic_evaluation(self, tet, pf = None):
         if not pf:
             pf = self.pf
-        pf = deepcopy(pf)
+        # Use shallow copy instead of deepcopy - much faster for 2D list
+        # Since we only modify the inner lists (not replace them), shallow copy is sufficient
+        pf = [row[:] for row in pf]
         pfw = len(pf[0])
         pfh = len(pf)
         
@@ -228,10 +230,15 @@ class TetrisAI:
             mult = 1
         else:
             return False
-        t = np.array(tet.minos)
+        # Pure Python rotation (replaces numpy for better performance and no dependency)
+        size = len(tet.minos)
         minos = []
-        for i in range(len(t[0])):
-            minos.append(t[:, -i-1].tolist() if mult == 1 else t[::-1,i].tolist())
+        if mult == 1:  # Clockwise rotation
+            for i in range(size):
+                minos.append([tet.minos[size - 1 - j][i] for j in range(size)])
+        else:  # Counter-clockwise rotation
+            for i in range(size):
+                minos.append([tet.minos[j][size - 1 - i] for j in range(size)])
                 
         tet.minos = minos
         dirs = ('N', 'E', 'S', 'W')

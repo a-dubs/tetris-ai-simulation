@@ -5,7 +5,6 @@
 # #==================================================================================================================# #
 import tkinter as tk
 from tkinter import Tk, Canvas, Frame, BOTH, StringVar
-import numpy as np
 from tetrimino import Tetrimino
 import tetris_ai
 from tetris_ai import TetrisAI
