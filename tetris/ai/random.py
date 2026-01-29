@@ -1,46 +1,50 @@
-"""Random AI player - makes random valid moves."""
+"""Random AI player - randomly selects from valid placements."""
 
 import random
 
 from tetris.ai.base import AIPlayer
 from tetris.core.game_state import GameState
-from tetris.core.tetrimino import Tetrimino
-from tetris.core.constants import PLAYFIELD_WIDTH
+from tetris.core.game_engine import GameEngine
+from tetris.ai.placement import find_all_placements
 
 
 class RandomAIPlayer(AIPlayer):
-    """AI player that makes random moves.
+    """AI player that randomly selects from valid placements.
 
-    Generates a random sequence of moves ending with 'drop'.
+    Finds all possible valid placements for the current piece and
+    randomly selects one. This is smarter than pure random moves
+    as it ensures valid placements while still being random.
+
     Useful for baseline testing and performance comparison.
     """
 
-    def __init__(self, max_moves: int = 20):
-        """Initialize random AI player.
-
-        Args:
-            max_moves: Maximum number of moves before dropping (default: 20)
-        """
-        self.max_moves = max_moves
+    def __init__(self):
+        """Initialize random AI player."""
+        self.engine: GameEngine | None = None
 
     def get_move_sequence(self, state: GameState) -> list[str]:
-        """Return a random sequence of moves.
+        """Return a random valid placement sequence.
 
         Args:
             state: Current game state
 
         Returns:
-            List of random moves ending with "drop"
+            List of moves ending with "drop" that leads to a random valid placement
         """
-        moves = []
-        num_moves = random.randint(1, self.max_moves)
+        # Create or update engine
+        if self.engine is None:
+            self.engine = GameEngine(initial_state=state)
+        else:
+            self.engine.state = state
 
-        # Generate random moves (excluding drop)
-        possible_moves = ["left", "right", "cw", "ccw"]
-        for _ in range(num_moves):
-            moves.append(random.choice(possible_moves))
+        # Find all possible placements
+        placements = find_all_placements(state, self.engine)
 
-        # Always end with drop
-        moves.append("drop")
+        if not placements:
+            # Fallback: if no valid placements found, just drop
+            return ["drop"]
 
-        return moves
+        # Randomly select one placement
+        selected_placement = random.choice(placements)
+
+        return selected_placement.path
