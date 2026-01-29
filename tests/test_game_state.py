@@ -3,16 +3,7 @@
 import pytest
 from dataclasses import replace
 
-# We'll need to import Tetrimino once we refactor it
-# For now, we'll use a mock or import from source
-import sys
-from pathlib import Path
-
-# Add source directory to path temporarily
-source_dir = Path(__file__).parent.parent / "source"
-sys.path.insert(0, str(source_dir))
-
-from tetrimino import Tetrimino
+from tetris.core.tetrimino import Tetrimino
 from tetris.core.game_state import GameState
 from tetris.core.constants import TOTAL_PLAYFIELD_HEIGHT, PLAYFIELD_WIDTH
 

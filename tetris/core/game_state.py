@@ -3,14 +3,7 @@
 from dataclasses import dataclass, field, replace
 from typing import List, Optional
 
-# Import Tetrimino from source temporarily until we refactor it
-import sys
-from pathlib import Path
-
-source_dir = Path(__file__).parent.parent.parent / "source"
-sys.path.insert(0, str(source_dir))
-
-from tetrimino import Tetrimino  # noqa: E402
+from tetris.core.tetrimino import Tetrimino
 
 
 @dataclass(frozen=True)
