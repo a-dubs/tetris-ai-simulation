@@ -89,11 +89,18 @@ def train(args):
 
 def _run_single_simulation(config: SimulationConfig) -> tuple:
     """Run a single simulation and return result plus runtime info."""
+    import time as time_module
+    
+    start_time = time_module.perf_counter()
     engine = GameEngine()
     ai = create_ai(config.ai_type, config)
     renderer = create_renderer(config.headless)
     sim = Simulator(engine, ai, renderer, config)
     result = sim.run()
+    execution_time = time_module.perf_counter() - start_time
+    
+    # Add execution time to result (store as attribute for now)
+    result.execution_time = execution_time
     return result
 
 
@@ -175,13 +182,15 @@ def run_benchmark(args):
             run_payloads.append(run_payload)
 
             if output_mode == "text":
+                exec_time = getattr(result, 'execution_time', None)
+                exec_str = f" exec={exec_time:.2f}s" if exec_time is not None else ""
                 print(
-                    f"{ai_type:>6} run {run_idx:>2}/{runs}: "
+                    f"{ai_type:>6} AI run {run_idx:>2}/{runs}: "
                     f"score={result.final_state.score:,} "
                     f"lines={result.final_state.lines_cleared} "
                     f"level={result.final_state.level} "
                     f"moves={result.moves_executed:,} "
-                    f"time={result.time_elapsed:.2f}s "
+                    f"sim_time={result.time_elapsed:.2f}s{exec_str} "
                     f"over={result.game_over}"
                 )
 
@@ -189,7 +198,9 @@ def run_benchmark(args):
         lines = [r.final_state.lines_cleared for r in results]
         levels = [r.final_state.level for r in results]
         moves = [r.moves_executed for r in results]
-        times = [r.time_elapsed for r in results]
+        sim_times = [r.time_elapsed for r in results]
+        exec_times = [getattr(r, 'execution_time', None) for r in results]
+        exec_times = [t for t in exec_times if t is not None]
         overs = sum(1 for r in results if r.game_over)
 
         def fmt_float(values: list[float]) -> str:
@@ -220,10 +231,15 @@ def run_benchmark(args):
                         "min": min(moves),
                         "max": max(moves),
                     },
-                    "time_seconds": {
-                        "avg": float(f"{statistics.mean(times):.2f}"),
-                        "min": float(f"{min(times):.2f}"),
-                        "max": float(f"{max(times):.2f}"),
+                    "sim_time_seconds": {
+                        "avg": float(f"{statistics.mean(sim_times):.2f}"),
+                        "min": float(f"{min(sim_times):.2f}"),
+                        "max": float(f"{max(sim_times):.2f}"),
+                    },
+                    "exec_time_seconds": {
+                        "avg": float(f"{statistics.mean(exec_times):.2f}") if exec_times else None,
+                        "min": float(f"{min(exec_times):.2f}") if exec_times else None,
+                        "max": float(f"{max(exec_times):.2f}") if exec_times else None,
                     },
                     "game_over": {"count": overs, "total": runs},
                 },
@@ -251,9 +267,14 @@ def run_benchmark(args):
                 f"min={min(moves):,} max={max(moves):,}"
             )
             print(
-                f"  time  avg={fmt_float(times)}s "
-                f"min={min(times):.2f}s max={max(times):.2f}s"
+                f"  sim_time  avg={fmt_float(sim_times)}s "
+                f"min={min(sim_times):.2f}s max={max(sim_times):.2f}s"
             )
+            if exec_times:
+                print(
+                    f"  exec_time avg={fmt_float(exec_times)}s "
+                    f"min={min(exec_times):.2f}s max={max(exec_times):.2f}s"
+                )
             print(f"  game over {overs}/{runs}")
             print("=" * 70)
             print()
