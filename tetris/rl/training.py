@@ -185,7 +185,9 @@ def train_agent(
     print("Initializing PPO model...")
     model_kwargs = config.agent.to_dict()
     model_kwargs["tensorboard_log"] = str(tensorboard_path)
-    model = PPO(config.agent.algorithm, train_env, **model_kwargs)
+    # Extract policy from kwargs (it's a positional arg to PPO)
+    policy = model_kwargs.pop("policy")
+    model = PPO(policy, train_env, **model_kwargs)
     
     # Setup callbacks
     visualizer = TrainingVisualizer(log_dir=str(log_path))
