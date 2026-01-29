@@ -581,11 +581,14 @@ class TetrisAI:
         return path[:i+1] + ["drop"]
     
     def get_best_moves(self):
+        # Optimize: use copy + shallow copy of minos instead of deepcopy
+        tet_copy = copy(self.tet)
+        tet_copy.minos = [row[:] for row in tet_copy.minos]
         
         state = {
-            "tetrimino": deepcopy(self.tet),
+            "tetrimino": tet_copy,
             "parent_move": "", 
-            "inherited_moves": self.moves,  # all remaining moves this state can do based on its ancestors' moves
+            "inherited_moves": self.moves.copy(),  # Copy list
             "timer": 0,
             "gravity_timer": 0 
         }
@@ -606,10 +609,18 @@ class TetrisAI:
             result = self.max_node(state, "path")
 
         elif self.method == "yield_to_next":
-            temp_state = deepcopy(state)
-            temp_state["tetrimino"] = self.next_tet
+            # Optimize: avoid deepcopy by creating new state and shallow copying playfield
+            next_tet_copy = copy(self.next_tet)
+            next_tet_copy.minos = [row[:] for row in next_tet_copy.minos]
+            temp_state = {
+                "tetrimino": next_tet_copy,
+                "parent_move": "",
+                "inherited_moves": self.moves.copy(),
+                "timer": 0,
+                "gravity_timer": 0
+            }
             next_tet_opt_loc = self.max_node(temp_state, "tetrimino")[1]
-            temp_pf = deepcopy(self.pf)
+            temp_pf = [row[:] for row in self.pf]  # Shallow copy instead of deepcopy
 
             self.place_tetrimino(temp_pf, next_tet_opt_loc)
             result = self.max_node(state, return_type="path", pf=temp_pf)
