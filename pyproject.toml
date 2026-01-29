@@ -14,6 +14,23 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.0.0",
 ]
+rl = [
+    "gymnasium>=0.29.0",
+    "stable-baselines3>=2.0.0",
+    "tensorboard>=2.13.0",
+    "matplotlib>=3.7.0",
+    "numpy>=1.24.0",
+]
+rl-full = [
+    "gymnasium>=0.29.0",
+    "stable-baselines3>=2.0.0",
+    "tensorboard>=2.13.0",
+    "matplotlib>=3.7.0",
+    "numpy>=1.24.0",
+    "wandb>=0.15.0",
+    "plotly>=5.17.0",
+    "imageio>=2.31.0",
+]
 
 [build-system]
 requires = ["hatchling"]
