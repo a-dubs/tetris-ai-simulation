@@ -482,7 +482,18 @@ class TetrisAI:
     def make_child_state(self, state, move, pf=None):
         if not pf:
             pf = self.pf
-        s = deepcopy(state)
+        # Optimize: only copy what's needed instead of deepcopying entire state
+        # Tetrimino needs copy (it gets mutated), but we can copy it more efficiently
+        tet_copy = copy(state["tetrimino"])
+        tet_copy.minos = [row[:] for row in tet_copy.minos]  # Shallow copy minos array
+        
+        s = {
+            "tetrimino": tet_copy,
+            "parent_move": move,  # New value
+            "inherited_moves": state["inherited_moves"].copy(),  # Copy list
+            "timer": state["timer"] + 1.0 / self.mps,  # New value
+            "gravity_timer": state["gravity_timer"]  # Will be updated below
+        }
         
         if move == "left" or move =="right":
             self.move_tetrimino(pf, s["tetrimino"], move)
@@ -495,9 +506,7 @@ class TetrisAI:
         else:
             pass
         
-        s["timer"] += 1.0 / self.mps
         s["gravity_timer"] = self.gravity(pf, s["tetrimino"], s["gravity_timer"], s["timer"], self.lvl)
-        s["parent_move"] = move
         s["inherited_moves"] = self.filter_child_moves(s["tetrimino"], move, s["inherited_moves"])
         if move == "ccw" or move == "cw":
             #print("prev_max_x: " + str(prev_max_x))
