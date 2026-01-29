@@ -3,6 +3,7 @@
 
 import argparse
 import sys
+import json
 import random
 import statistics
 
@@ -12,8 +13,14 @@ from tetris.simulation.config import SimulationConfig
 from tetris.simulation.factory import create_ai, create_renderer
 
 
+def _apply_seed(seed: int | None):
+    if seed is not None:
+        random.seed(seed)
+
+
 def run_game(args):
     """Run a single game simulation."""
+    _apply_seed(args.seed)
     config = SimulationConfig(
         ai_type=args.ai,
         headless=args.headless,
@@ -77,14 +84,29 @@ def run_benchmark(args):
     if runs <= 0:
         raise ValueError("runs must be >= 1")
 
-    print(f"Benchmark runs: {runs}")
-    print()
+    output_mode = args.format
+    if args.output_file and output_mode != "json":
+        raise ValueError("--output-file requires --format json")
+    if output_mode == "text":
+        print(f"Benchmark runs: {runs}")
+        print()
+
+    summary_payload = {
+        "runs": runs,
+        "max_moves": args.max_moves,
+        "max_time": args.max_time,
+        "level": args.level,
+        "mps": args.mps,
+        "seed": args.seed,
+        "ais": [],
+    }
 
     for ai_type in ai_types:
         results = []
+        run_payloads = []
         for run_idx in range(1, runs + 1):
             if args.seed is not None:
-                random.seed(args.seed + run_idx)
+                _apply_seed(args.seed + run_idx)
 
             config = SimulationConfig(
                 ai_type=ai_type,
@@ -99,14 +121,25 @@ def run_benchmark(args):
             result = _run_single_simulation(config)
             results.append(result)
 
-            print(
-                f"{ai_type:>6} run {run_idx:>2}/{runs}: "
-                f"score={result.final_state.score:,} "
-                f"lines={result.final_state.lines_cleared} "
-                f"moves={result.moves_executed:,} "
-                f"time={result.time_elapsed:.2f}s "
-                f"over={result.game_over}"
-            )
+            run_payload = {
+                "run": run_idx,
+                "score": result.final_state.score,
+                "lines": result.final_state.lines_cleared,
+                "moves": result.moves_executed,
+                "time_seconds": round(result.time_elapsed, 4),
+                "game_over": result.game_over,
+            }
+            run_payloads.append(run_payload)
+
+            if output_mode == "text":
+                print(
+                    f"{ai_type:>6} run {run_idx:>2}/{runs}: "
+                    f"score={result.final_state.score:,} "
+                    f"lines={result.final_state.lines_cleared} "
+                    f"moves={result.moves_executed:,} "
+                    f"time={result.time_elapsed:.2f}s "
+                    f"over={result.game_over}"
+                )
 
         scores = [r.final_state.score for r in results]
         lines = [r.final_state.lines_cleared for r in results]
@@ -117,28 +150,67 @@ def run_benchmark(args):
         def fmt_float(values: list[float]) -> str:
             return f"{statistics.mean(values):.2f}"
 
-        print()
-        print(f"{ai_type} summary")
-        print("-" * 70)
-        print(
-            f"  score avg={fmt_float(scores)} "
-            f"min={min(scores):,} max={max(scores):,}"
+        summary_payload["ais"].append(
+            {
+                "ai": ai_type,
+                "runs": run_payloads,
+                "summary": {
+                    "score": {
+                        "avg": float(f"{statistics.mean(scores):.2f}"),
+                        "min": min(scores),
+                        "max": max(scores),
+                    },
+                    "lines": {
+                        "avg": float(f"{statistics.mean(lines):.2f}"),
+                        "min": min(lines),
+                        "max": max(lines),
+                    },
+                    "moves": {
+                        "avg": float(f"{statistics.mean(moves):.2f}"),
+                        "min": min(moves),
+                        "max": max(moves),
+                    },
+                    "time_seconds": {
+                        "avg": float(f"{statistics.mean(times):.2f}"),
+                        "min": float(f"{min(times):.2f}"),
+                        "max": float(f"{max(times):.2f}"),
+                    },
+                    "game_over": {"count": overs, "total": runs},
+                },
+            }
         )
-        print(
-            f"  lines avg={fmt_float(lines)} "
-            f"min={min(lines)} max={max(lines)}"
-        )
-        print(
-            f"  moves avg={fmt_float(moves)} "
-            f"min={min(moves):,} max={max(moves):,}"
-        )
-        print(
-            f"  time  avg={fmt_float(times)}s "
-            f"min={min(times):.2f}s max={max(times):.2f}s"
-        )
-        print(f"  game over {overs}/{runs}")
-        print("=" * 70)
-        print()
+
+        if output_mode == "text":
+            print()
+            print(f"{ai_type} summary")
+            print("-" * 70)
+            print(
+                f"  score avg={fmt_float(scores)} "
+                f"min={min(scores):,} max={max(scores):,}"
+            )
+            print(
+                f"  lines avg={fmt_float(lines)} "
+                f"min={min(lines)} max={max(lines)}"
+            )
+            print(
+                f"  moves avg={fmt_float(moves)} "
+                f"min={min(moves):,} max={max(moves):,}"
+            )
+            print(
+                f"  time  avg={fmt_float(times)}s "
+                f"min={min(times):.2f}s max={max(times):.2f}s"
+            )
+            print(f"  game over {overs}/{runs}")
+            print("=" * 70)
+            print()
+
+    if output_mode == "json":
+        payload = json.dumps(summary_payload, indent=2, sort_keys=False)
+        if args.output_file:
+            with open(args.output_file, "w", encoding="utf-8") as handle:
+                handle.write(payload)
+        else:
+            print(payload)
 
 
 def main():
@@ -168,6 +240,12 @@ Examples:
         choices=["random", "greedy", "fast"],
         default="random",
         help="AI type to use (default: random)",
+    )
+    run_parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="RNG seed for reproducible runs (default: none)",
     )
     run_parser.add_argument(
         "--headless",
@@ -228,6 +306,18 @@ Examples:
         choices=["random", "greedy", "fast"],
         action="append",
         help="AI type to benchmark (can be specified multiple times)",
+    )
+    bench_parser.add_argument(
+        "--format",
+        choices=["text", "json"],
+        default="text",
+        help="Output format (default: text)",
+    )
+    bench_parser.add_argument(
+        "--output-file",
+        type=str,
+        default=None,
+        help="Write JSON output to a file (default: stdout)",
     )
     bench_parser.add_argument(
         "--runs",
