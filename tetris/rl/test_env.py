@@ -1,7 +1,7 @@
 """Test script to verify RL environment works correctly.
 
 Run this before training to ensure everything is set up properly:
-    python -m tetris.ai.rl_test_env
+    python -m tetris.rl.test_env
 """
 
 import sys
@@ -45,7 +45,7 @@ def test_environment():
     print("\nTesting TetrisEnv...")
     
     try:
-        from tetris.ai.rl_example import TetrisEnv, state_to_features
+        from tetris.rl.env import TetrisEnv, state_to_features
         print("✓ TetrisEnv imported")
     except ImportError as e:
         print(f"✗ Failed to import TetrisEnv: {e}")
@@ -93,7 +93,7 @@ def test_feature_extraction():
     
     try:
         from tetris.core.game_engine import GameEngine
-        from tetris.ai.rl_example import state_to_features
+        from tetris.rl.env import state_to_features
         
         engine = GameEngine()
         features = state_to_features(engine.state)
@@ -118,7 +118,7 @@ def test_reward_calculation():
     
     try:
         from tetris.core.game_engine import GameEngine
-        from tetris.ai.rl_example import calculate_reward
+        from tetris.rl.env import calculate_reward
         
         engine = GameEngine()
         prev_state = engine.state
@@ -145,7 +145,7 @@ def test_training_setup():
     print("\nTesting training setup...")
     
     try:
-        from tetris.ai.rl_example import TetrisEnv
+        from tetris.rl.env import TetrisEnv
         from stable_baselines3 import PPO
         from stable_baselines3.common.vec_env import DummyVecEnv
         

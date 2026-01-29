@@ -21,13 +21,13 @@ pip install -e ".[rl-full]"
 Train a basic agent for 100k timesteps:
 
 ```bash
-python -m tetris.ai.rl_training train --timesteps 100000
+python -m tetris.rl.training train --timesteps 100000
 ```
 
 Train with custom parameters:
 
 ```bash
-python -m tetris.ai.rl_training train \
+python -m tetris.rl.training train \
     --timesteps 1000000 \
     --lr 3e-4 \
     --batch-size 64 \
@@ -42,7 +42,7 @@ python -m tetris.ai.rl_training train \
 Evaluate a trained model:
 
 ```bash
-python -m tetris.ai.rl_training evaluate \
+python -m tetris.rl.training evaluate \
     --model ./rl_logs/checkpoints/tetris_rl_best.zip \
     --episodes 10
 ```
@@ -50,7 +50,7 @@ python -m tetris.ai.rl_training evaluate \
 Evaluate with rendering:
 
 ```bash
-python -m tetris.ai.rl_training evaluate \
+python -m tetris.rl.training evaluate \
     --model ./rl_logs/checkpoints/tetris_rl_best.zip \
     --episodes 5 \
     --render
@@ -61,7 +61,7 @@ python -m tetris.ai.rl_training evaluate \
 Watch the agent play:
 
 ```bash
-python -m tetris.ai.rl_training visualize \
+python -m tetris.rl.training visualize \
     --model ./rl_logs/checkpoints/tetris_rl_best.zip \
     --episodes 3
 ```
@@ -71,7 +71,7 @@ python -m tetris.ai.rl_training visualize \
 Plot training metrics:
 
 ```bash
-python -m tetris.ai.rl_visualization plot \
+python -m tetris.rl.visualization plot \
     --metrics-file ./rl_logs/metrics.json \
     --output training_plot.png
 ```
@@ -79,14 +79,14 @@ python -m tetris.ai.rl_visualization plot \
 View statistics:
 
 ```bash
-python -m tetris.ai.rl_visualization stats \
+python -m tetris.rl.visualization stats \
     --recent 100
 ```
 
 Create interactive dashboard:
 
 ```bash
-python -m tetris.ai.rl_visualization dashboard \
+python -m tetris.rl.visualization dashboard \
     --metrics-file ./rl_logs/metrics.json \
     --output dashboard.html
 ```
@@ -114,7 +114,7 @@ Start with default parameters, then experiment:
 
 ### Reward Function Tuning
 
-The reward function in `rl_example.py` can be customized:
+The reward function in `tetris/rl/env.py` can be customized:
 
 - Adjust line clearing rewards (currently 100, 300, 500, 800)
 - Modify height penalties
@@ -169,7 +169,7 @@ The agent receives ~23 engineered features:
 
 ```bash
 # 1. Start training
-python -m tetris.ai.rl_training train \
+python -m tetris.rl.training train \
     --timesteps 500000 \
     --model-name experiment1 \
     --log-dir ./experiments/exp1
@@ -178,17 +178,17 @@ python -m tetris.ai.rl_training train \
 tensorboard --logdir ./experiments/exp1/tensorboard
 
 # 3. After training, evaluate
-python -m tetris.ai.rl_training evaluate \
+python -m tetris.rl.training evaluate \
     --model ./experiments/exp1/checkpoints/tetris_rl_best.zip \
     --episodes 20
 
 # 4. Visualize best episodes
-python -m tetris.ai.rl_training visualize \
+python -m tetris.rl.training visualize \
     --model ./experiments/exp1/checkpoints/tetris_rl_best.zip \
     --episodes 5
 
 # 5. Generate plots
-python -m tetris.ai.rl_visualization plot \
+python -m tetris.rl.visualization plot \
     --metrics-file ./experiments/exp1/metrics.json \
     --output exp1_progress.png
 ```
@@ -238,9 +238,9 @@ Reduce batch size or use CPU:
 
 ## Files Overview
 
-- `tetris/ai/rl_example.py`: Core RL environment and utilities
-- `tetris/ai/rl_training.py`: Main training script
-- `tetris/ai/rl_visualization.py`: Visualization tools
+- `tetris/rl/env.py`: Core RL environment and utilities
+- `tetris/rl/training.py`: Main training script
+- `tetris/rl/visualization.py`: Visualization tools
 - `RL_FEASIBILITY_ANALYSIS.md`: Detailed analysis and architecture
 
 ## Resources

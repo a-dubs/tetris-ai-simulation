@@ -9,9 +9,9 @@ This script provides a complete training pipeline with:
 - Checkpointing
 
 Usage:
-    python -m tetris.ai.rl_training train --episodes 10000
-    python -m tetris.ai.rl_training evaluate --model model.zip
-    python -m tetris.ai.rl_training visualize --model model.zip
+    python -m tetris.rl.training train --timesteps 100000
+    python -m tetris.rl.training evaluate --model model.zip
+    python -m tetris.rl.training visualize --model model.zip
 """
 
 import argparse
@@ -36,8 +36,8 @@ except ImportError as e:
     print(f"RL dependencies not available: {e}")
     print("Install with: pip install gymnasium stable-baselines3")
 
-from tetris.ai.rl_example import TetrisEnv, TrainingMetrics
-from tetris.ai.rl_visualization import TrainingVisualizer
+from tetris.rl.env import TetrisEnv, TrainingMetrics
+from tetris.rl.visualization import TrainingVisualizer
 
 
 class TrainingCallback:

@@ -8,25 +8,25 @@ This document summarizes the RL (Reinforcement Learning) implementation for the 
 
 ### Core RL Implementation
 
-1. **`tetris/ai/rl_example.py`** (608 lines)
+1. **`tetris/rl/env.py`** (608 lines)
    - `TetrisEnv`: Gymnasium environment wrapper
    - `state_to_features()`: State representation (23 engineered features)
    - `calculate_reward()`: Shaped reward function
    - Training utilities and example usage
 
-2. **`tetris/ai/rl_training.py`** (350+ lines)
+2. **`tetris/rl/training.py`** (350+ lines)
    - Main training script with PPO
    - Evaluation and visualization commands
    - Comprehensive logging and checkpointing
    - TensorBoard integration
 
-3. **`tetris/ai/rl_visualization.py`** (400+ lines)
+3. **`tetris/rl/visualization.py`** (400+ lines)
    - Training metrics tracking
    - Plotting utilities (matplotlib)
    - Interactive dashboard (plotly)
    - Statistics and comparison tools
 
-4. **`tetris/ai/rl_benchmark.py`** (200+ lines)
+4. **`tetris/rl/benchmark.py`** (200+ lines)
    - Benchmark RL agent vs baseline AIs
    - Statistical comparison
    - Performance evaluation
@@ -104,10 +104,10 @@ pip install -e ".[rl-full]"
 
 ```bash
 # Basic training
-python -m tetris.ai.rl_training train --timesteps 100000
+python -m tetris.rl.training train --timesteps 100000
 
 # Custom training
-python -m tetris.ai.rl_training train \
+python -m tetris.rl.training train \
     --timesteps 1000000 \
     --lr 3e-4 \
     --batch-size 64 \
@@ -119,12 +119,12 @@ python -m tetris.ai.rl_training train \
 
 ```bash
 # Evaluate agent
-python -m tetris.ai.rl_training evaluate \
+python -m tetris.rl.training evaluate \
     --model ./rl_logs/checkpoints/tetris_rl_best.zip \
     --episodes 10
 
 # Visualize agent
-python -m tetris.ai.rl_training visualize \
+python -m tetris.rl.training visualize \
     --model ./rl_logs/checkpoints/tetris_rl_best.zip \
     --episodes 3
 ```
@@ -133,12 +133,12 @@ python -m tetris.ai.rl_training visualize \
 
 ```bash
 # Compare with all baselines
-python -m tetris.ai.rl_benchmark \
+python -m tetris.rl.benchmark \
     --model ./rl_logs/checkpoints/tetris_rl_best.zip \
     --games 10
 
 # Compare with specific baseline
-python -m tetris.ai.rl_benchmark \
+python -m tetris.rl.benchmark \
     --model ./rl_logs/checkpoints/tetris_rl_best.zip \
     --baseline greedy \
     --games 10
@@ -148,15 +148,15 @@ python -m tetris.ai.rl_benchmark \
 
 ```bash
 # Plot training progress
-python -m tetris.ai.rl_visualization plot \
+python -m tetris.rl.visualization plot \
     --metrics-file ./rl_logs/metrics.json \
     --output progress.png
 
 # View statistics
-python -m tetris.ai.rl_visualization stats
+python -m tetris.rl.visualization stats
 
 # Create dashboard
-python -m tetris.ai.rl_visualization dashboard \
+python -m tetris.rl.visualization dashboard \
     --metrics-file ./rl_logs/metrics.json
 ```
 
@@ -235,8 +235,8 @@ The RL implementation integrates seamlessly with the existing architecture:
 
 ### Immediate
 1. Install dependencies: `pip install -e ".[rl]"`
-2. Run initial training: `python -m tetris.ai.rl_training train --timesteps 10000`
-3. Evaluate and visualize: `python -m tetris.ai.rl_training visualize --model <path>`
+2. Run initial training: `python -m tetris.rl.training train --timesteps 10000`
+3. Evaluate and visualize: `python -m tetris.rl.training visualize --model <path>`
 
 ### Short Term
 1. Hyperparameter tuning (learning rate, batch size)

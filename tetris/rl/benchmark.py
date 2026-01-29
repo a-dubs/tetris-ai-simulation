@@ -20,7 +20,7 @@ from tetris.core.game_state import GameState
 from tetris.simulation.simulator import Simulator
 from tetris.simulation.config import SimulationConfig
 from tetris.simulation.factory import create_ai, create_renderer
-from tetris.ai.rl_example import TetrisEnv
+from tetris.rl.env import TetrisEnv
 
 
 def run_baseline_ai(ai_type: str, num_games: int = 10) -> Dict[str, List[float]]:
