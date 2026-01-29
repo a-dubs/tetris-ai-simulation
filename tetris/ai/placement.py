@@ -72,30 +72,51 @@ def find_all_placements(
             tet.orientation = dirs[(dirs.index(tet.orientation) + 1) % 4]
 
         # Get width and height of rotated piece
-        piece_width = len(tet.minos[0]) if tet.minos else tet.size
+        # Calculate actual occupied width (not just minos array width)
+        min_col = None
+        max_col = None
+        for row in tet.minos:
+            for col_idx, cell in enumerate(row):
+                if cell != " ":
+                    if min_col is None or col_idx < min_col:
+                        min_col = col_idx
+                    if max_col is None or col_idx > max_col:
+                        max_col = col_idx
+        
+        if min_col is None:
+            # Empty piece (shouldn't happen)
+            continue
+            
+        piece_width = max_col - min_col + 1
         piece_height = len(tet.minos) if tet.minos else tet.size
+        
+        # Calculate x range: x such that (x-1) + min_col >= 0 and (x-1) + max_col < PLAYFIELD_WIDTH
+        # For blocks to fit: (x-1) + min_col >= 0  => x >= 1 - min_col
+        #                    (x-1) + max_col < PLAYFIELD_WIDTH  => x < PLAYFIELD_WIDTH - max_col + 1
+        # Note: x can be 0 or even negative for pieces with blocks not at the left edge
+        min_x = max(0, 1 - min_col)  # Allow x=0 for pieces with min_col > 0
+        max_x = PLAYFIELD_WIDTH - max_col  # Inclusive upper bound
 
         # Try all x positions
-        for x in range(1, PLAYFIELD_WIDTH - piece_width + 2):
+        for x in range(min_x, max_x + 1):
             # Create tetrimino at this position
-            # Start high enough that the piece fits entirely above playfield
-            # y is 1-indexed, so we need y high enough that y + piece_height - 1 <= TOTAL_PLAYFIELD_HEIGHT
-            start_y = TOTAL_PLAYFIELD_HEIGHT - piece_height + 2
+            # Start high enough that the piece fits entirely within playfield
+            # y is 1-indexed, so we need y such that y + piece_height - 1 <= TOTAL_PLAYFIELD_HEIGHT
+            # This means y <= TOTAL_PLAYFIELD_HEIGHT - piece_height + 1
+            start_y = TOTAL_PLAYFIELD_HEIGHT - piece_height + 1
 
             test_tet = copy.copy(tet)
             test_tet.x = x
             test_tet.y = start_y
 
-            # Drop it down until it lands
+            # Drop it down until it lands (matches game engine's _drop_tetrimino logic)
             dropped_tet = copy.copy(test_tet)
-            # Keep dropping while valid and above bottom
-            while dropped_tet.y > 1:
-                test_y = dropped_tet.y - 1
-                test_tet_copy = copy.copy(dropped_tet)
-                test_tet_copy.y = test_y
-                if not engine.valid_location(test_tet_copy):
-                    break
-                dropped_tet.y = test_y
+            start_y = dropped_tet.y
+            while engine.valid_location(dropped_tet):
+                dropped_tet.y -= 1
+            dropped_tet.y += 1
+            if dropped_tet.y > start_y:
+                dropped_tet.y = start_y
 
             # Check if this is a valid final placement
             if engine.valid_location(dropped_tet) and dropped_tet.y >= 1:
