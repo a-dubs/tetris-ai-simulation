@@ -49,9 +49,15 @@ class TestFactory:
         assert isinstance(renderer, Renderer)
 
     def test_create_renderer_gui(self):
-        """Test creating GUI renderer (currently returns headless)."""
-        # TODO: When GUI renderer is implemented, update this test
-        renderer = create_renderer(headless=False)
-        assert isinstance(renderer, Renderer)
-        # Currently returns HeadlessRenderer as placeholder
-        assert isinstance(renderer, HeadlessRenderer)
+        """Test creating GUI renderer (returns PygameRenderer)."""
+        try:
+            from tetris.render.pygame_gui import PygameRenderer
+
+            renderer = create_renderer(headless=False)
+            assert isinstance(renderer, Renderer)
+            assert isinstance(renderer, PygameRenderer)
+        except ImportError:
+            # If pygame not available, should fall back to headless
+            renderer = create_renderer(headless=False)
+            assert isinstance(renderer, Renderer)
+            assert isinstance(renderer, HeadlessRenderer)
