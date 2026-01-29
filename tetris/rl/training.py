@@ -9,9 +9,9 @@ This script provides a complete training pipeline with:
 - Checkpointing
 
 Usage:
-    python -m tetris.rl.training train --timesteps 100000
-    python -m tetris.rl.training evaluate --model model.zip
-    python -m tetris.rl.training visualize --model model.zip
+    uv run python -m tetris.rl.training train --timesteps 100000
+    uv run python -m tetris.rl.training evaluate --model model.zip
+    uv run python -m tetris.rl.training visualize --model model.zip
 """
 
 import argparse

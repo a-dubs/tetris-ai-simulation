@@ -24,13 +24,13 @@ uv pip install -e ".[rl]"
 Train a basic agent for 100k timesteps:
 
 ```bash
-python -m tetris.rl.training train --timesteps 100000
+uv run python -m tetris.rl.training train --timesteps 100000
 ```
 
 Train with custom parameters:
 
 ```bash
-python -m tetris.rl.training train \
+uv run python -m tetris.rl.training train \
     --timesteps 1000000 \
     --lr 3e-4 \
     --batch-size 64 \
@@ -45,7 +45,7 @@ python -m tetris.rl.training train \
 Evaluate a trained model:
 
 ```bash
-python -m tetris.rl.training evaluate \
+uv run python -m tetris.rl.training evaluate \
     --model ./rl_logs/checkpoints/tetris_rl_best.zip \
     --episodes 10
 ```
@@ -53,7 +53,7 @@ python -m tetris.rl.training evaluate \
 Evaluate with rendering:
 
 ```bash
-python -m tetris.rl.training evaluate \
+uv run python -m tetris.rl.training evaluate \
     --model ./rl_logs/checkpoints/tetris_rl_best.zip \
     --episodes 5 \
     --render
@@ -64,7 +64,7 @@ python -m tetris.rl.training evaluate \
 Watch the agent play:
 
 ```bash
-python -m tetris.rl.training visualize \
+uv run python -m tetris.rl.training visualize \
     --model ./rl_logs/checkpoints/tetris_rl_best.zip \
     --episodes 3
 ```
@@ -74,7 +74,7 @@ python -m tetris.rl.training visualize \
 Plot training metrics:
 
 ```bash
-python -m tetris.rl.visualization plot \
+uv run python -m tetris.rl.visualization plot \
     --metrics-file ./rl_logs/metrics.json \
     --output training_plot.png
 ```
@@ -82,14 +82,14 @@ python -m tetris.rl.visualization plot \
 View statistics:
 
 ```bash
-python -m tetris.rl.visualization stats \
+uv run python -m tetris.rl.visualization stats \
     --recent 100
 ```
 
 Create interactive dashboard:
 
 ```bash
-python -m tetris.rl.visualization dashboard \
+uv run python -m tetris.rl.visualization dashboard \
     --metrics-file ./rl_logs/metrics.json \
     --output dashboard.html
 ```
@@ -172,7 +172,7 @@ The agent receives ~23 engineered features:
 
 ```bash
 # 1. Start training
-python -m tetris.rl.training train \
+uv run python -m tetris.rl.training train \
     --timesteps 500000 \
     --model-name experiment1 \
     --log-dir ./experiments/exp1
@@ -181,17 +181,17 @@ python -m tetris.rl.training train \
 tensorboard --logdir ./experiments/exp1/tensorboard
 
 # 3. After training, evaluate
-python -m tetris.rl.training evaluate \
+uv run python -m tetris.rl.training evaluate \
     --model ./experiments/exp1/checkpoints/tetris_rl_best.zip \
     --episodes 20
 
 # 4. Visualize best episodes
-python -m tetris.rl.training visualize \
+uv run python -m tetris.rl.training visualize \
     --model ./experiments/exp1/checkpoints/tetris_rl_best.zip \
     --episodes 5
 
 # 5. Generate plots
-python -m tetris.rl.visualization plot \
+uv run python -m tetris.rl.visualization plot \
     --metrics-file ./experiments/exp1/metrics.json \
     --output exp1_progress.png
 ```

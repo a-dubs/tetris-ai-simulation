@@ -1,7 +1,7 @@
 """Test script to verify RL environment works correctly.
 
 Run this before training to ensure everything is set up properly:
-    python -m tetris.rl.test_env
+    uv run python -m tetris.rl.test_env
 """
 
 import sys

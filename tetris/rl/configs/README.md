@@ -23,7 +23,7 @@ tetris/rl/configs/
 
 Use default configs:
 ```bash
-python -m tetris.rl.training train --timesteps 100000
+uv run python -m tetris.rl.training train --timesteps 100000
 ```
 
 ### Mix and Match
@@ -31,13 +31,13 @@ python -m tetris.rl.training train --timesteps 100000
 Combine different agent and scenario configs:
 ```bash
 # Large network with aggressive rewards
-python -m tetris.rl.training train \
+uv run python -m tetris.rl.training train \
     --agent-config large_network \
     --scenario-config aggressive_rewards \
     --timesteps 1000000
 
 # Fast training with survival-focused rewards
-python -m tetris.rl.training train \
+uv run python -m tetris.rl.training train \
     --agent-config fast_training \
     --scenario-config survival_focused \
     --timesteps 500000
@@ -47,7 +47,7 @@ python -m tetris.rl.training train \
 
 Override config values with command-line arguments:
 ```bash
-python -m tetris.rl.training train \
+uv run python -m tetris.rl.training train \
     --agent-config default \
     --scenario-config default \
     --lr 5e-4 \
@@ -59,7 +59,7 @@ python -m tetris.rl.training train \
 
 Use absolute paths for custom configs:
 ```bash
-python -m tetris.rl.training train \
+uv run python -m tetris.rl.training train \
     --agent-config /path/to/my_agent.yaml \
     --scenario-config /path/to/my_scenario.yaml
 ```
@@ -192,7 +192,7 @@ train_agent(config=config, total_timesteps=1000000)
 
 ```bash
 # Fast iteration with aggressive rewards
-python -m tetris.rl.training train \
+uv run python -m tetris.rl.training train \
     --agent-config fast_training \
     --scenario-config aggressive_rewards \
     --timesteps 50000
@@ -202,7 +202,7 @@ python -m tetris.rl.training train \
 
 ```bash
 # Large network with balanced rewards
-python -m tetris.rl.training train \
+uv run python -m tetris.rl.training train \
     --agent-config large_network \
     --scenario-config default \
     --timesteps 5000000
@@ -212,7 +212,7 @@ python -m tetris.rl.training train \
 
 ```bash
 # Focus on staying alive
-python -m tetris.rl.training train \
+uv run python -m tetris.rl.training train \
     --agent-config default \
     --scenario-config survival_focused \
     --timesteps 1000000

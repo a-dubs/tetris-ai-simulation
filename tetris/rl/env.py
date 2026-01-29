@@ -11,10 +11,10 @@ To use this, install RL dependencies:
     uv pip install gymnasium stable-baselines3 tensorboard
 
 Then train:
-    python -m tetris.rl.training train --timesteps 100000
+    uv run python -m tetris.rl.training train --timesteps 100000
 
 Visualize:
-    python -m tetris.rl.training visualize --model model.zip
+    uv run python -m tetris.rl.training visualize --model model.zip
 """
 
 import numpy as np

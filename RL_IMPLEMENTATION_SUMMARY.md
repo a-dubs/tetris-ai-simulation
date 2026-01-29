@@ -107,10 +107,10 @@ uv pip install -e ".[rl]"
 
 ```bash
 # Basic training
-python -m tetris.rl.training train --timesteps 100000
+uv run python -m tetris.rl.training train --timesteps 100000
 
 # Custom training
-python -m tetris.rl.training train \
+uv run python -m tetris.rl.training train \
     --timesteps 1000000 \
     --lr 3e-4 \
     --batch-size 64 \
@@ -122,12 +122,12 @@ python -m tetris.rl.training train \
 
 ```bash
 # Evaluate agent
-python -m tetris.rl.training evaluate \
+uv run python -m tetris.rl.training evaluate \
     --model ./rl_logs/checkpoints/tetris_rl_best.zip \
     --episodes 10
 
 # Visualize agent
-python -m tetris.rl.training visualize \
+uv run python -m tetris.rl.training visualize \
     --model ./rl_logs/checkpoints/tetris_rl_best.zip \
     --episodes 3
 ```
@@ -136,12 +136,12 @@ python -m tetris.rl.training visualize \
 
 ```bash
 # Compare with all baselines
-python -m tetris.rl.benchmark \
+uv run python -m tetris.rl.benchmark \
     --model ./rl_logs/checkpoints/tetris_rl_best.zip \
     --games 10
 
 # Compare with specific baseline
-python -m tetris.rl.benchmark \
+uv run python -m tetris.rl.benchmark \
     --model ./rl_logs/checkpoints/tetris_rl_best.zip \
     --baseline greedy \
     --games 10
@@ -151,15 +151,15 @@ python -m tetris.rl.benchmark \
 
 ```bash
 # Plot training progress
-python -m tetris.rl.visualization plot \
+uv run python -m tetris.rl.visualization plot \
     --metrics-file ./rl_logs/metrics.json \
     --output progress.png
 
 # View statistics
-python -m tetris.rl.visualization stats
+uv run python -m tetris.rl.visualization stats
 
 # Create dashboard
-python -m tetris.rl.visualization dashboard \
+uv run python -m tetris.rl.visualization dashboard \
     --metrics-file ./rl_logs/metrics.json
 ```
 
@@ -238,8 +238,8 @@ The RL implementation integrates seamlessly with the existing architecture:
 
 ### Immediate
 1. Install dependencies: `uv sync --extra rl`
-2. Run initial training: `python -m tetris.rl.training train --timesteps 10000`
-3. Evaluate and visualize: `python -m tetris.rl.training visualize --model <path>`
+2. Run initial training: `uv run python -m tetris.rl.training train --timesteps 10000`
+3. Evaluate and visualize: `uv run python -m tetris.rl.training visualize --model <path>`
 
 ### Short Term
 1. Hyperparameter tuning (learning rate, batch size)
