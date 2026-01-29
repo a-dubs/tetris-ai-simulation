@@ -20,7 +20,7 @@ A Tetris simulation framework for developing, testing, and training AI agents. O
 uv sync
 
 # Or install manually
-pip install -e .
+uv pip install -e .
 ```
 
 ### Running Simulations
