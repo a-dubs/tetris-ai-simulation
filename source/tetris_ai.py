@@ -150,8 +150,20 @@ class TetrisAI:
 
         clears = TetrisAI.update_playfield(pf, tet)
         score = TetrisAI.score_move(clears, 1)
-        max_stack_height = sum([int(row.count(' ') < pfw) for row in pf])
-        cliffs = [[int(pf[row][col] != ' ' and pf[row - 1][col] == ' ') for col in range(pfw)] for row in range(1, pfh - 4)]
+        
+        # Cache row emptiness checks to avoid repeated count() calls
+        row_empty_counts = [row.count(' ') for row in pf]
+        max_stack_height = sum([int(empty_count < pfw) for empty_count in row_empty_counts])
+        
+        # Optimize cliff detection - cache previous row checks
+        cliffs = []
+        for row in range(1, pfh - 4):
+            cliff_row = []
+            prev_row_data = pf[row - 1]
+            curr_row_data = pf[row]
+            for col in range(pfw):
+                cliff_row.append(int(curr_row_data[col] != ' ' and prev_row_data[col] == ' '))
+            cliffs.append(cliff_row)
 
         cliff_heights = [[0 for item in row] for row in cliffs]
         for col in range(pfw):
@@ -173,7 +185,9 @@ class TetrisAI:
 
         cliff_heights = sum([sum(row) for row in cliff_heights])
         
-        stack_danger = sum([int(pf[row].count(' ') < pfw) * ((row - self.params["stack_d_thresh"]) ** self.params["stack_d_e"]) for row in range(int(self.params["stack_d_thresh"])+1, len(pf))])
+        # Use cached row_empty_counts instead of recalculating
+        stack_d_thresh_int = int(self.params["stack_d_thresh"])
+        stack_danger = sum([int(row_empty_counts[row] < pfw) * ((row - stack_d_thresh_int) ** self.params["stack_d_e"]) for row in range(stack_d_thresh_int + 1, len(pf))])
         
 
         cliff_lengths = 0
@@ -190,7 +204,15 @@ class TetrisAI:
                 if i == pfw - 1 and prev_i != -1 and cliffs[row][i] > 0:
                     cliff_lengths += (i - prev_i + 1) ** self.params["cliff_l_e"] * self.params["cliff_l_w"]
                     
-        a_stacks = sum([max([row * int(pf[row][col] != ' ') for row in range(len(pf))]) for col in range(pfw)])/(1.0 * pfw)
+        # Optimize average stack height calculation - cache column heights
+        column_heights = []
+        for col in range(pfw):
+            max_height = 0
+            for row in range(len(pf)):
+                if pf[row][col] != ' ':
+                    max_height = row + 1  # +1 because row is 0-indexed
+            column_heights.append(max_height)
+        a_stacks = sum(column_heights) / float(pfw)
         
         
         eval = 0

@@ -123,7 +123,7 @@ def benchmark_deepcopy_vs_shallowcopy(iterations=1000):
     }
 
 
-def run_all_benchmarks():
+def run_all_benchmarks(baseline_avg=None, baseline_total=None):
     """Run all benchmarks and print results."""
     print("=" * 70)
     print("PERFORMANCE BENCHMARKS")
@@ -132,10 +132,21 @@ def run_all_benchmarks():
     print("\n1. Heuristic Evaluation Benchmark (100 iterations)")
     print("-" * 70)
     result = benchmark_heuristic_evaluation(100)
-    print(f"  Average: {result['avg']:.4f} ms")
+    print(f"  Average: {result['avg']:.4f} ms", end="")
+    if baseline_avg:
+        speedup = baseline_avg / result['avg']
+        improvement = (1 - result['avg'] / baseline_avg) * 100
+        print(f" (was {baseline_avg:.4f} ms, {improvement:+.1f}% faster, {speedup:.2f}x speedup)")
+    else:
+        print()
     print(f"  Min:     {result['min']:.4f} ms")
     print(f"  Max:     {result['max']:.4f} ms")
-    print(f"  Total:   {result['total']:.4f} ms")
+    print(f"  Total:   {result['total']:.4f} ms", end="")
+    if baseline_total:
+        speedup = baseline_total / result['total']
+        print(f" (was {baseline_total:.4f} ms, {speedup:.2f}x speedup)")
+    else:
+        print()
     print(f"  Result:  {result['result']:.2f}")
     
     print("\n2. Get Best Moves Benchmark (10 iterations)")
