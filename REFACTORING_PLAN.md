@@ -130,6 +130,138 @@ tetris_ai_simulation/
 
 ## Step-by-Step Implementation
 
+### Step 0: Project Setup & Tooling
+**Files**: `pyproject.toml`, `.ruff.toml` (optional), `.python-version`
+
+**Setup with uv**:
+```bash
+# Initialize uv project
+uv init --no-readme
+
+# Add dependencies
+uv add pytest pytest-cov
+uv add --dev ruff mypy
+```
+
+**File**: `pyproject.toml`
+```toml
+[project]
+name = "tetris-ai-simulation"
+version = "0.1.0"
+description = "Tetris AI simulation and training framework"
+requires-python = ">=3.10"
+dependencies = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--cov=tetris",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+```
+
+**File**: `.python-version`
+```
+3.10
+```
+
+**File**: `.gitignore` (update)
+```
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Project specific
+.uv/
+```
+
 ### Step 1: Create Core Package Structure
 ```bash
 mkdir -p tetris/{core,ai,render,simulation}
@@ -354,6 +486,15 @@ if __name__ == '__main__':
 ---
 
 ## Migration Checklist
+
+### Phase 0: Project Setup & Tooling
+- [ ] Initialize `pyproject.toml` with uv
+- [ ] Configure ruff for linting/formatting
+- [ ] Set up pytest configuration
+- [ ] Add mypy configuration (optional)
+- [ ] Update `.gitignore`
+- [ ] Create `.python-version` file
+- [ ] Verify tooling works: `uv run ruff check .`, `uv run pytest`
 
 ### Phase 1: Foundation (Week 1)
 - [ ] Create package structure

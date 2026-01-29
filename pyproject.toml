@@ -55,6 +55,9 @@ addopts = [
     "--cov-report=term-missing",
     "--cov-report=html",
 ]
+env = [
+    "DISPLAY=",  # Disable X11 display for headless testing
+]
 
 [tool.mypy]
 python_version = "3.10"
