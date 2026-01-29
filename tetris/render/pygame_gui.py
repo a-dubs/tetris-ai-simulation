@@ -7,7 +7,7 @@ from tetris.render.base import Renderer
 from tetris.core.game_state import GameState
 from tetris.core.constants import (
     PLAYFIELD_WIDTH,
-    TOTAL_PLAYFIELD_HEIGHT,
+    PLAYFIELD_HEIGHT,
     MINO_SIZE,
     COLORS,
     OUTLINE_COLORS,
@@ -47,7 +47,7 @@ class PygameRenderer(Renderer):
 
         # Calculate window dimensions
         playfield_width_px = PLAYFIELD_WIDTH * MINO_SIZE
-        playfield_height_px = TOTAL_PLAYFIELD_HEIGHT * MINO_SIZE
+        playfield_height_px = PLAYFIELD_HEIGHT * MINO_SIZE
         sidebar_width = 200  # For score, next piece, etc.
         window_width = playfield_width_px + sidebar_width
         window_height = playfield_height_px
@@ -124,15 +124,15 @@ class PygameRenderer(Renderer):
     def _draw_playfield(self, state: GameState) -> None:
         """Draw the playfield grid.
         
-        Note: Playfield array row 0 is at the bottom logically (y=1),
-        so we flip the Y coordinate when rendering.
+        Note: Playfield array row 0 is at the bottom logically (y=1).
+        Only the visible playfield (PLAYFIELD_HEIGHT) is rendered; the skybox is hidden.
         """
-        for row in range(TOTAL_PLAYFIELD_HEIGHT):
+        for row in range(PLAYFIELD_HEIGHT):
             for col in range(PLAYFIELD_WIDTH):
                 x = col * MINO_SIZE
                 # Flip Y: row 0 (bottom) should be at bottom of screen
                 # playfield_height - row - 1 converts array index to screen Y
-                screen_y = (TOTAL_PLAYFIELD_HEIGHT - row - 1) * MINO_SIZE
+                screen_y = (PLAYFIELD_HEIGHT - row - 1) * MINO_SIZE
 
                 # Get cell color
                 cell_char = state.playfield[row][col]
@@ -150,7 +150,8 @@ class PygameRenderer(Renderer):
         """Draw a tetrimino on the playfield.
         
         Note: Tetrimino y coordinate is 1-indexed with y=1 at bottom.
-        We need to flip the Y coordinate to match screen coordinates.
+        We need to flip the Y coordinate to match screen coordinates and
+        skip cells that are in the skybox.
         """
         if not tetrimino:
             return
@@ -163,13 +164,13 @@ class PygameRenderer(Renderer):
                     pf_x = tetrimino.x + col - 1
                     pf_y = tetrimino.y + row - 1  # This is 1-indexed, y=1 is bottom
 
-                    # Bounds check
-                    if 0 <= pf_x < PLAYFIELD_WIDTH and 0 <= pf_y < TOTAL_PLAYFIELD_HEIGHT:
+                    # Bounds check (only draw visible playfield, hide skybox)
+                    if 0 <= pf_x < PLAYFIELD_WIDTH and 0 <= pf_y < PLAYFIELD_HEIGHT:
                         screen_x = pf_x * MINO_SIZE
-                        # Flip Y: convert 1-indexed bottom-up to screen coordinates
-                        # pf_y is 1-indexed (1 = bottom), convert to 0-indexed array row
-                        array_row = pf_y - 1  # Convert to 0-indexed
-                        screen_y = (TOTAL_PLAYFIELD_HEIGHT - array_row - 1) * MINO_SIZE
+                        # Flip Y: convert 0-indexed array row to screen coordinates
+                        # pf_y is already 0-indexed (row 0 = bottom)
+                        array_row = pf_y  # pf_y is already 0-indexed
+                        screen_y = (PLAYFIELD_HEIGHT - array_row - 1) * MINO_SIZE
 
                         # Get color
                         cell_char = tetrimino.minos[row][col]
@@ -189,7 +190,7 @@ class PygameRenderer(Renderer):
         sidebar_y = 20
 
         # Background for sidebar
-        sidebar_rect = pygame.Rect(sidebar_x, 0, 200, TOTAL_PLAYFIELD_HEIGHT * MINO_SIZE)
+        sidebar_rect = pygame.Rect(sidebar_x, 0, 200, PLAYFIELD_HEIGHT * MINO_SIZE)
         pygame.draw.rect(self.screen, self.sidebar_color, sidebar_rect)
 
         # Score
@@ -210,7 +211,7 @@ class PygameRenderer(Renderer):
         if state.game_over:
             game_over_text = self.font_large.render("GAME OVER", True, (255, 0, 0))
             text_rect = game_over_text.get_rect(
-                center=(sidebar_x + 100, TOTAL_PLAYFIELD_HEIGHT * MINO_SIZE // 2)
+                center=(sidebar_x + 100, PLAYFIELD_HEIGHT * MINO_SIZE // 2)
             )
             self.screen.blit(game_over_text, text_rect)
 

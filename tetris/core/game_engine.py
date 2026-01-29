@@ -5,7 +5,7 @@ from typing import Tuple
 
 from tetris.core.game_state import GameState
 from tetris.core.tetrimino import Tetrimino
-from tetris.core.constants import PLAYFIELD_WIDTH, TOTAL_PLAYFIELD_HEIGHT, BAG_SIZE
+from tetris.core.constants import PLAYFIELD_WIDTH, TOTAL_PLAYFIELD_HEIGHT, BAG_SIZE, spawn_y_for_size
 
 
 class GameEngine:
@@ -29,11 +29,17 @@ class GameEngine:
             [" " for _ in range(PLAYFIELD_WIDTH)] for _ in range(TOTAL_PLAYFIELD_HEIGHT)
         ]
         bag = Tetrimino.make_bag(BAG_SIZE)
+        next_shape = bag.pop(0)
+        active_shape = bag.pop(0)
         next_tet = Tetrimino(
-            bag.pop(0), x=PLAYFIELD_WIDTH // 2 - 1, y=TOTAL_PLAYFIELD_HEIGHT - 3
+            next_shape,
+            x=PLAYFIELD_WIDTH // 2 - 1,
+            y=spawn_y_for_size(len(Tetrimino.get_minos(next_shape))),
         )
         active_tet = Tetrimino(
-            bag.pop(0), x=PLAYFIELD_WIDTH // 2 - 1, y=TOTAL_PLAYFIELD_HEIGHT - 3
+            active_shape,
+            x=PLAYFIELD_WIDTH // 2 - 1,
+            y=spawn_y_for_size(len(Tetrimino.get_minos(active_shape))),
         )
 
         return GameState(

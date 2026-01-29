@@ -45,3 +45,8 @@ OUTLINE_COLORS = {
     ' ': "#aaa",
     '~': "#888",
 }
+
+
+def spawn_y_for_size(size: int) -> int:
+    """Return spawn Y so piece top aligns with visible playfield top."""
+    return PLAYFIELD_HEIGHT - size + 1

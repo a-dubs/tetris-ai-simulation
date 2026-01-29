@@ -105,7 +105,7 @@ class Simulator:
                     )
 
                     # Update score and level
-                    from tetris.core.constants import BAG_SIZE, PLAYFIELD_WIDTH, TOTAL_PLAYFIELD_HEIGHT
+                    from tetris.core.constants import BAG_SIZE, PLAYFIELD_WIDTH, spawn_y_for_size
                     from tetris.core.tetrimino import Tetrimino
 
                     # Calculate score (simplified - should use proper scoring)
@@ -123,10 +123,14 @@ class Simulator:
                         bag = Tetrimino.make_bag(BAG_SIZE)
 
                     active_tet = new_state.next_tetrimino
+                    active_tet.x = PLAYFIELD_WIDTH // 2 - 1
+                    active_tet.y = spawn_y_for_size(active_tet.size)
+                    active_tet.lowest_y = active_tet.y
+                    next_shape = bag.pop(0)
                     next_tet = Tetrimino(
-                        bag.pop(0),
+                        next_shape,
                         x=PLAYFIELD_WIDTH // 2 - 1,
-                        y=TOTAL_PLAYFIELD_HEIGHT - 3,
+                        y=spawn_y_for_size(len(Tetrimino.get_minos(next_shape))),
                     )
 
                     # Check if tetrimino has landed (if not, move it down one)
