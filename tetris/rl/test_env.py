@@ -92,6 +92,7 @@ def test_feature_extraction():
     print("\nTesting feature extraction...")
     
     try:
+        import numpy as np
         from tetris.core.game_engine import GameEngine
         from tetris.rl.env import state_to_features
         
