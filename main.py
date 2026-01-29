@@ -125,6 +125,7 @@ def run_benchmark(args):
                 "run": run_idx,
                 "score": result.final_state.score,
                 "lines": result.final_state.lines_cleared,
+                "level": result.final_state.level,
                 "moves": result.moves_executed,
                 "time_seconds": round(result.time_elapsed, 4),
                 "game_over": result.game_over,
@@ -136,6 +137,7 @@ def run_benchmark(args):
                     f"{ai_type:>6} run {run_idx:>2}/{runs}: "
                     f"score={result.final_state.score:,} "
                     f"lines={result.final_state.lines_cleared} "
+                    f"level={result.final_state.level} "
                     f"moves={result.moves_executed:,} "
                     f"time={result.time_elapsed:.2f}s "
                     f"over={result.game_over}"
@@ -143,6 +145,7 @@ def run_benchmark(args):
 
         scores = [r.final_state.score for r in results]
         lines = [r.final_state.lines_cleared for r in results]
+        levels = [r.final_state.level for r in results]
         moves = [r.moves_executed for r in results]
         times = [r.time_elapsed for r in results]
         overs = sum(1 for r in results if r.game_over)
@@ -164,6 +167,11 @@ def run_benchmark(args):
                         "avg": float(f"{statistics.mean(lines):.2f}"),
                         "min": min(lines),
                         "max": max(lines),
+                    },
+                    "level": {
+                        "avg": float(f"{statistics.mean(levels):.2f}"),
+                        "min": min(levels),
+                        "max": max(levels),
                     },
                     "moves": {
                         "avg": float(f"{statistics.mean(moves):.2f}"),
@@ -191,6 +199,10 @@ def run_benchmark(args):
             print(
                 f"  lines avg={fmt_float(lines)} "
                 f"min={min(lines)} max={max(lines)}"
+            )
+            print(
+                f"  level avg={fmt_float(levels)} "
+                f"min={min(levels)} max={max(levels)}"
             )
             print(
                 f"  moves avg={fmt_float(moves)} "
