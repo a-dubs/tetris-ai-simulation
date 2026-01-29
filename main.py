@@ -3,6 +3,8 @@
 
 import argparse
 import sys
+import random
+import statistics
 
 from tetris.core.game_engine import GameEngine
 from tetris.simulation.simulator import Simulator
@@ -56,6 +58,87 @@ def train(args):
     print("Training functionality not yet implemented.")
     print("This will be added in a future update.")
     return None
+
+
+def _run_single_simulation(config: SimulationConfig) -> tuple:
+    """Run a single simulation and return result plus runtime info."""
+    engine = GameEngine()
+    ai = create_ai(config.ai_type, config)
+    renderer = create_renderer(config.headless)
+    sim = Simulator(engine, ai, renderer, config)
+    result = sim.run()
+    return result
+
+
+def run_benchmark(args):
+    """Run multiple headless simulations and summarize results."""
+    ai_types = args.ai or ["random"]
+    runs = args.runs
+    if runs <= 0:
+        raise ValueError("runs must be >= 1")
+
+    print(f"Benchmark runs: {runs}")
+    print()
+
+    for ai_type in ai_types:
+        results = []
+        for run_idx in range(1, runs + 1):
+            if args.seed is not None:
+                random.seed(args.seed + run_idx)
+
+            config = SimulationConfig(
+                ai_type=ai_type,
+                headless=True,
+                max_moves=args.max_moves,
+                max_time=args.max_time,
+                initial_level=args.level,
+                moves_per_second=args.mps,
+                render_delay=0.0,
+            )
+
+            result = _run_single_simulation(config)
+            results.append(result)
+
+            print(
+                f"{ai_type:>6} run {run_idx:>2}/{runs}: "
+                f"score={result.final_state.score:,} "
+                f"lines={result.final_state.lines_cleared} "
+                f"moves={result.moves_executed:,} "
+                f"time={result.time_elapsed:.2f}s "
+                f"over={result.game_over}"
+            )
+
+        scores = [r.final_state.score for r in results]
+        lines = [r.final_state.lines_cleared for r in results]
+        moves = [r.moves_executed for r in results]
+        times = [r.time_elapsed for r in results]
+        overs = sum(1 for r in results if r.game_over)
+
+        def fmt_float(values: list[float]) -> str:
+            return f"{statistics.mean(values):.2f}"
+
+        print()
+        print(f"{ai_type} summary")
+        print("-" * 70)
+        print(
+            f"  score avg={fmt_float(scores)} "
+            f"min={min(scores):,} max={max(scores):,}"
+        )
+        print(
+            f"  lines avg={fmt_float(lines)} "
+            f"min={min(lines)} max={max(lines)}"
+        )
+        print(
+            f"  moves avg={fmt_float(moves)} "
+            f"min={min(moves):,} max={max(moves):,}"
+        )
+        print(
+            f"  time  avg={fmt_float(times)}s "
+            f"min={min(times):.2f}s max={max(times):.2f}s"
+        )
+        print(f"  game over {overs}/{runs}")
+        print("=" * 70)
+        print()
 
 
 def main():
@@ -138,6 +221,51 @@ Examples:
         help="Batch size for training (default: 10)",
     )
 
+    # Benchmark command
+    bench_parser = subparsers.add_parser("benchmark", help="Benchmark AIs headlessly")
+    bench_parser.add_argument(
+        "--ai",
+        choices=["random", "greedy", "fast"],
+        action="append",
+        help="AI type to benchmark (can be specified multiple times)",
+    )
+    bench_parser.add_argument(
+        "--runs",
+        type=int,
+        default=10,
+        help="Number of runs per AI (default: 10)",
+    )
+    bench_parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Base RNG seed for reproducible runs (default: none)",
+    )
+    bench_parser.add_argument(
+        "--max-moves",
+        type=int,
+        default=10000,
+        help="Maximum moves before stopping (default: 10000)",
+    )
+    bench_parser.add_argument(
+        "--max-time",
+        type=float,
+        default=None,
+        help="Maximum time in seconds (default: no limit)",
+    )
+    bench_parser.add_argument(
+        "--level",
+        type=int,
+        default=1,
+        help="Starting level (default: 1)",
+    )
+    bench_parser.add_argument(
+        "--mps",
+        type=int,
+        default=4,
+        help="Moves per second (default: 4)",
+    )
+
     args = parser.parse_args()
 
     if not args.command:
@@ -148,6 +276,8 @@ Examples:
         run_game(args)
     elif args.command == "train":
         train(args)
+    elif args.command == "benchmark":
+        run_benchmark(args)
     else:
         parser.print_help()
         sys.exit(1)
