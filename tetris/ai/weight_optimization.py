@@ -309,7 +309,7 @@ def optimize_evolutionary(
     num_runs: int = 50,
     games_per_run: int = 20,
     population_size: int = 10,
-    seed: Optional[int] = 42,
+    seed: Optional[int] = None,
     output_file: Optional[str] = None,
     robust_fitness: bool = True,
 ) -> EvaluationResult:
@@ -388,7 +388,10 @@ def optimize_evolutionary(
         eval_weights_start = time.perf_counter()
         # Create fresh perf_log for this evaluation to avoid overwriting
         eval_perf_log = {}
-        result = evaluate_weights(params, num_games=games_per_run, seed=seed, perf_log=eval_perf_log)
+        # Use different seed for each evaluation (seed + eval_count)
+        # This ensures each evaluation uses different piece sequences
+        eval_seed = seed + eval_count
+        result = evaluate_weights(params, num_games=games_per_run, seed=eval_seed, perf_log=eval_perf_log)
         eval_weights_time = time.perf_counter() - eval_weights_start
         perf_log["eval_weights_times"].append(eval_weights_time)
         
@@ -426,13 +429,22 @@ def optimize_evolutionary(
         
         return -fitness  # Minimize negative fitness
     
-    print(f"Starting CMA-ES optimization...")
+    # Generate random seed if not provided
+    if seed is None:
+        import secrets
+        seed = secrets.randbelow(2**31)  # Random 32-bit integer
+        print(f"Starting CMA-ES optimization (using random seed: {seed})...")
+    else:
+        print(f"Starting CMA-ES optimization (using seed: {seed})...")
     print(f"  Runs: {num_runs}")
     print(f"  Games per run: {games_per_run}")
     print(f"  Population size: {population_size}")
     print(f"  Robust fitness: {robust_fitness} (mean{' + min + consistency' if robust_fitness else ''})")
     print(f"  Initial params: {initial_params}")
     print()
+    
+    # Update CMA-ES options with actual seed (was using original seed param)
+    options["seed"] = seed
     
     # Run CMA-ES
     cma_start_time = time.perf_counter()
@@ -490,7 +502,7 @@ def optimize_bayesian(
     initial_params: Optional[Dict[str, Any]] = None,
     num_iterations: int = 30,
     games_per_iter: int = 20,
-    seed: Optional[int] = 42,
+    seed: Optional[int] = None,
     output_file: Optional[str] = None,
 ) -> EvaluationResult:
     """Optimize weights using Bayesian Optimization.
@@ -544,12 +556,26 @@ def optimize_bayesian(
     best_fitness = float("-inf")
     history = []
     
+    # Generate random seed if not provided
+    if seed is None:
+        import secrets
+        seed = secrets.randbelow(2**31)
+        print(f"Starting Bayesian Optimization (using random seed: {seed})...")
+    else:
+        print(f"Starting Bayesian Optimization (using seed: {seed})...")
+    
+    iter_count = 0
+    
     @use_named_args(dimensions=dimensions)
     def objective(**params):
         """Objective function: negative fitness."""
-        nonlocal best_result, best_fitness
+        nonlocal best_result, best_fitness, iter_count
         
-        result = evaluate_weights(params, num_games=games_per_iter, seed=seed)
+        # Use different seed for each iteration (seed + iter_count)
+        # This ensures each iteration evaluates with different piece sequences
+        eval_seed = seed + iter_count
+        iter_count += 1
+        result = evaluate_weights(params, num_games=games_per_iter, seed=eval_seed)
         fitness = result.fitness(robust=True)
         
         history.append({
@@ -615,7 +641,7 @@ def optimize_bayesian(
 def optimize_meta_rl(
     timesteps: int = 100000,
     games_per_eval: int = 5,
-    seed: Optional[int] = 42,
+    seed: Optional[int] = None,
     output_file: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Use RL to learn optimal weights (meta-learning).
@@ -690,10 +716,12 @@ def optimize_meta_rl(
             self.prev_score = 0.0
             self.prev_lines = 0.0
             self.prev_moves = 0.0
+            self.episode_count = 0
         
         def reset(self, seed=None, options=None):
             """Reset environment for new episode."""
             super().reset(seed=seed)
+            self.episode_count += 1
             # Keep previous episode's info for observation
             # (weights will be set by action in first step)
             return self._get_obs(), {}
@@ -710,8 +738,12 @@ def optimize_meta_rl(
             
             # Play full game(s) with these weights
             # No weight changes during gameplay - weights are fixed for entire game(s)
+            # Use different seed for each episode (seed + episode_count)
+            # This ensures each episode evaluates with different piece sequences
+            # Note: seed is captured from outer scope
+            episode_seed = seed + self.episode_count
             result = evaluate_weights(
-                new_params, num_games=games_per_eval, seed=seed, headless=True
+                new_params, num_games=games_per_eval, seed=episode_seed, headless=True
             )
             
             # Calculate reward from final game performance
@@ -751,12 +783,18 @@ def optimize_meta_rl(
             
             return obs
     
-    print(f"Starting Meta-RL optimization...")
+    # Generate random seed if not provided
+    if seed is None:
+        import secrets
+        seed = secrets.randbelow(2**31)
+        print(f"Starting Meta-RL optimization (using random seed: {seed})...")
+    else:
+        print(f"Starting Meta-RL optimization (using seed: {seed})...")
     print(f"  Timesteps: {timesteps}")
     print(f"  Games per eval: {games_per_eval}")
     print()
     
-    # Create environment
+    # Create environment (seed is captured from outer scope in closure)
     env = WeightOptimizationEnv()
     
     # Create PPO agent
@@ -800,8 +838,10 @@ def optimize_meta_rl(
     
     # Final evaluation
     if best_params:
+        # Use a high seed offset for final evaluation to ensure different sequences
+        final_seed = seed + 10000 if seed is not None else None
         final_result = evaluate_weights(
-            best_params, num_games=games_per_eval * 4, seed=seed
+            best_params, num_games=games_per_eval * 4, seed=final_seed
         )
         print(f"\nTraining complete!")
         print(f"Best fitness: {best_fitness:.4f}")
@@ -846,7 +886,8 @@ def main():
     evolve_parser.add_argument("--runs", type=int, default=50, help="Number of iterations")
     evolve_parser.add_argument("--games-per-run", type=int, default=20, help="Games per evaluation")
     evolve_parser.add_argument("--population-size", type=int, default=10, help="CMA-ES population size")
-    evolve_parser.add_argument("--seed", type=int, default=42, help="Random seed")
+    evolve_parser.add_argument("--seed", type=int, default=None, 
+                               help="Random seed (default: random each run for better exploration)")
     evolve_parser.add_argument("--output", type=str, help="Output JSON file")
     evolve_parser.add_argument("--no-robust-fitness", action="store_true", 
                                help="Use simple mean-only fitness instead of robust (mean+min+consistency)")
@@ -855,14 +896,16 @@ def main():
     bayesian_parser = subparsers.add_parser("bayesian", help="Bayesian optimization")
     bayesian_parser.add_argument("--iterations", type=int, default=30, help="Number of iterations")
     bayesian_parser.add_argument("--games-per-iter", type=int, default=20, help="Games per iteration")
-    bayesian_parser.add_argument("--seed", type=int, default=42, help="Random seed")
+    bayesian_parser.add_argument("--seed", type=int, default=None,
+                                 help="Random seed (default: random each run for better exploration)")
     bayesian_parser.add_argument("--output", type=str, help="Output JSON file")
     
     # Meta-RL
     meta_rl_parser = subparsers.add_parser("meta_rl", help="Meta-RL optimization")
     meta_rl_parser.add_argument("--timesteps", type=int, default=100000, help="Training timesteps")
     meta_rl_parser.add_argument("--games-per-eval", type=int, default=5, help="Games per evaluation")
-    meta_rl_parser.add_argument("--seed", type=int, default=42, help="Random seed")
+    meta_rl_parser.add_argument("--seed", type=int, default=None,
+                                help="Random seed (default: random each run for better exploration)")
     meta_rl_parser.add_argument("--output", type=str, help="Output JSON file")
     
     args = parser.parse_args()
