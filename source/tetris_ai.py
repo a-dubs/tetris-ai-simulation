@@ -7,6 +7,7 @@ from tetrimino import Tetrimino
 import random
 from copy import copy, deepcopy
 from time import time
+from functools import lru_cache
 
 # #==================================================================================================================# #
 # #==================================================================================================================# #
@@ -79,6 +80,11 @@ class TetrisAI:
             }
         else:
             self.params = params
+        
+        # Cache for heuristic evaluations (key: playfield hash + tetrimino state)
+        self._eval_cache = {}
+        self._cache_hits = 0
+        self._cache_misses = 0
     
     @staticmethod   
     def game_over(pf):
@@ -138,9 +144,26 @@ class TetrisAI:
         # maybe add multiplier for length of overhang? ie overhang of 2 is worse than 1
     # TODO: maybe also add even bigger penatly for holes (empty cell surrounded by minos)
 
+    def _pf_hash(self, pf, tet):
+        """Create a hashable key from playfield and tetrimino state for caching."""
+        # Create a tuple representation of playfield (first 16 rows for performance)
+        # and tetrimino position/orientation
+        pf_tuple = tuple(tuple(row) for row in pf[:16])  # Cache top 16 rows
+        tet_key = (tet.x, tet.y, tet.orientation, tet.size)
+        return (pf_tuple, tet_key)
+    
     def greedy_heuristic_evaluation(self, tet, pf = None):
         if not pf:
             pf = self.pf
+        
+        # Try cache first
+        cache_key = self._pf_hash(pf, tet)
+        if cache_key in self._eval_cache:
+            self._cache_hits += 1
+            return self._eval_cache[cache_key]
+        
+        self._cache_misses += 1
+        
         # Use shallow copy instead of deepcopy - much faster for 2D list
         # Since we only modify the inner lists (not replace them), shallow copy is sufficient
         pf = [row[:] for row in pf]
@@ -223,6 +246,11 @@ class TetrisAI:
         eval += cliff_heights
         eval += clears * self.params["score_w"]
         eval += int(self.game_over(pf)) * self.params["go_w"]
+        
+        # Cache result (limit cache size to prevent memory bloat)
+        if len(self._eval_cache) < 10000:
+            self._eval_cache[cache_key] = eval
+        
         #print(eval)
         return eval
  
