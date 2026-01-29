@@ -105,11 +105,17 @@ class PygameRenderer(Renderer):
         return tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
 
     def _draw_playfield(self, state: GameState) -> None:
-        """Draw the playfield grid."""
+        """Draw the playfield grid.
+        
+        Note: Playfield array row 0 is at the bottom logically (y=1),
+        so we flip the Y coordinate when rendering.
+        """
         for row in range(TOTAL_PLAYFIELD_HEIGHT):
             for col in range(PLAYFIELD_WIDTH):
                 x = col * MINO_SIZE
-                y = row * MINO_SIZE
+                # Flip Y: row 0 (bottom) should be at bottom of screen
+                # playfield_height - row - 1 converts array index to screen Y
+                screen_y = (TOTAL_PLAYFIELD_HEIGHT - row - 1) * MINO_SIZE
 
                 # Get cell color
                 cell_char = state.playfield[row][col]
@@ -119,27 +125,34 @@ class PygameRenderer(Renderer):
                 outline_color = self._hex_to_rgb(outline_hex)
 
                 # Draw cell
-                rect = pygame.Rect(x, y, MINO_SIZE, MINO_SIZE)
+                rect = pygame.Rect(x, screen_y, MINO_SIZE, MINO_SIZE)
                 pygame.draw.rect(self.screen, color, rect)
                 pygame.draw.rect(self.screen, outline_color, rect, 1)
 
     def _draw_tetrimino(self, tetrimino, playfield) -> None:
-        """Draw a tetrimino on the playfield."""
+        """Draw a tetrimino on the playfield.
+        
+        Note: Tetrimino y coordinate is 1-indexed with y=1 at bottom.
+        We need to flip the Y coordinate to match screen coordinates.
+        """
         if not tetrimino:
             return
 
         for row in range(tetrimino.size):
             for col in range(tetrimino.size):
                 if tetrimino.minos[row][col] != " ":
-                    # Calculate screen position
-                    # Note: tetrimino coordinates are 1-indexed
+                    # Calculate playfield position
+                    # Note: tetrimino coordinates are 1-indexed, y=1 is at bottom
                     pf_x = tetrimino.x + col - 1
-                    pf_y = tetrimino.y + row - 1
+                    pf_y = tetrimino.y + row - 1  # This is 1-indexed, y=1 is bottom
 
                     # Bounds check
                     if 0 <= pf_x < PLAYFIELD_WIDTH and 0 <= pf_y < TOTAL_PLAYFIELD_HEIGHT:
                         screen_x = pf_x * MINO_SIZE
-                        screen_y = pf_y * MINO_SIZE
+                        # Flip Y: convert 1-indexed bottom-up to screen coordinates
+                        # pf_y is 1-indexed (1 = bottom), convert to 0-indexed array row
+                        array_row = pf_y - 1  # Convert to 0-indexed
+                        screen_y = (TOTAL_PLAYFIELD_HEIGHT - array_row - 1) * MINO_SIZE
 
                         # Get color
                         cell_char = tetrimino.minos[row][col]
