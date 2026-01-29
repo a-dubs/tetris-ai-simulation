@@ -60,9 +60,9 @@ class FastAIPlayer(AIPlayer):
             "stack_d_e": 1.2,
             "stack_d_thresh": 15,  # Start penalizing above row 15
             
-            # Score rewards (prioritize clears - MUCH higher for multiple clears)
-            "score_w": 150.0,  # Base reward per line clear (increased significantly)
-            "tetris_bonus": 1000.0,  # MASSIVE bonus for 4-line clear (Tetris) - should ALWAYS be chosen!
+            # Score rewards (prioritize clears)
+            "score_w": 50.0,  # Reward per line clear (moderate increase from original 15)
+            "tetris_bonus": 100.0,  # Small bonus for 4-line clear (Tetris)
             
             # Game over (very strong penalty)
             "go_w": -1000.0,
@@ -118,15 +118,8 @@ class FastAIPlayer(AIPlayer):
         test_engine = GameEngine(initial_state=state)
         new_state, lines_cleared = test_engine.update_playfield(placement.tetrimino)
         
-        # Special bonus: if this creates a 4-line clear (Tetris), give massive boost
-        # This ensures Tetris opportunities are ALWAYS taken
-        base_score = self._improved_heuristic_evaluation(new_state.playfield, lines_cleared)
-        
-        if lines_cleared == 4:
-            # Extra boost for Tetris - make it irresistible!
-            base_score += 500.0
-        
-        return base_score
+        # Use improved heuristic evaluation
+        return self._improved_heuristic_evaluation(new_state.playfield, lines_cleared)
 
     def _improved_heuristic_evaluation(self, playfield: list, lines_cleared: int) -> float:
         """Improved heuristic evaluation prioritizing low stacks, avoiding holes, and clears.
@@ -146,9 +139,7 @@ class FastAIPlayer(AIPlayer):
             # Add line clear bonus (not cached)
             clear_bonus = lines_cleared * self.params["score_w"]
             if lines_cleared == 4:
-                clear_bonus += self.params.get("tetris_bonus", 200.0)
-            elif lines_cleared >= 2:
-                clear_bonus += lines_cleared * 20.0
+                clear_bonus += self.params.get("tetris_bonus", 100.0)
             return cached_score + clear_bonus
         
         self._cache_misses += 1
@@ -190,20 +181,7 @@ class FastAIPlayer(AIPlayer):
         # Build evaluation score
         eval_score = 0
         
-        # Clear rewards FIRST (highest priority - evaluate BEFORE stack penalties)
-        # Multiple clears are exponentially better (Tetris = 4 clears is amazing!)
-        if lines_cleared > 0:
-            # Base reward for clears
-            eval_score += lines_cleared * self.params["score_w"]
-            # Extra bonus for Tetris (4-line clear)
-            if lines_cleared == 4:
-                eval_score += self.params.get("tetris_bonus", 200.0)
-            # Bonus multiplier for multiple clears (2 clears > 2x single clear)
-            elif lines_cleared >= 2:
-                eval_score += lines_cleared * 20.0  # Extra bonus for 2+ clears
-        
         # Stack height penalties (keep stack low)
-        # NOTE: These are evaluated AFTER clears, so clearing lines reduces penalties
         eval_score += (max_stack_height ** self.params["m_stack_e"]) * self.params["m_stack_w"]
         eval_score += (a_stacks ** self.params["a_stack_e"]) * self.params["a_stack_w"]
         eval_score += stack_danger * self.params["stack_d_w"]
@@ -219,6 +197,11 @@ class FastAIPlayer(AIPlayer):
         eval_score += cliff_lengths
         eval_score += cliff_heights_sum
         
+        # Clear rewards (prioritize clears)
+        eval_score += lines_cleared * self.params["score_w"]
+        if lines_cleared == 4:
+            eval_score += self.params.get("tetris_bonus", 100.0)
+        
         # Game over penalty (very strong)
         game_over = self._check_game_over(playfield)
         eval_score += int(game_over) * self.params["go_w"]
@@ -228,12 +211,10 @@ class FastAIPlayer(AIPlayer):
             height_variance = sum([(h - a_stacks) ** 2 for h in column_heights]) / len(column_heights)
             eval_score += height_variance * -1.0  # Prefer balanced stacks
         
-        # Cache result (without line clear bonuses, since those vary)
+        # Cache result (without line clear bonus, since that varies)
         clear_bonus = lines_cleared * self.params["score_w"]
         if lines_cleared == 4:
-            clear_bonus += self.params.get("tetris_bonus", 200.0)
-        elif lines_cleared >= 2:
-            clear_bonus += lines_cleared * 20.0
+            clear_bonus += self.params.get("tetris_bonus", 100.0)
         
         if len(self._eval_cache) < 10000:
             self._eval_cache[cache_key] = eval_score - clear_bonus
