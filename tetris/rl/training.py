@@ -118,38 +118,74 @@ def train_agent(
         print("Error: RL dependencies not available")
         return
     
+    # Load config if provided
+    if config is None:
+        if agent_config or scenario_config:
+            config = load_config(agent_config=agent_config, scenario_config=scenario_config)
+        else:
+            # Use defaults
+            config = load_config()
+    
+    # Override config with explicit parameters if provided
+    if total_timesteps != 1_000_000:
+        config.total_timesteps = total_timesteps
+    if model_name != "tetris_rl":
+        config.model_name = model_name
+    if log_dir != "./rl_logs":
+        config.log_dir = log_dir
+    if checkpoint_freq != 50_000:
+        config.checkpoint_freq = checkpoint_freq
+    if eval_freq != 10_000:
+        config.scenario.training["eval_freq"] = eval_freq
+    if render_every != 100:
+        config.render_every = render_every
+    
+    # Override agent config with explicit params if provided
+    if learning_rate != 3e-4:
+        config.agent.learning_rate = learning_rate
+    if batch_size != 64:
+        config.agent.batch_size = batch_size
+    if n_steps != 2048:
+        config.agent.n_steps = n_steps
+    if n_epochs != 10:
+        config.agent.n_epochs = n_epochs
+    if gamma != 0.99:
+        config.agent.gamma = gamma
+    if verbose != 1:
+        config.agent.verbose = verbose
+    
     # Create directories
-    log_path = Path(log_dir)
+    log_path = Path(config.log_dir)
     log_path.mkdir(parents=True, exist_ok=True)
     checkpoint_path = log_path / "checkpoints"
     checkpoint_path.mkdir(exist_ok=True)
     tensorboard_path = log_path / "tensorboard"
     tensorboard_path.mkdir(exist_ok=True)
     
-    # Create environments
+    # Create environments with scenario config
     print("Creating environments...")
-    train_env = TetrisEnv()
-    train_env = Monitor(train_env, log_path / "train_monitor")
+    reward_params = config.scenario.get_reward_params()
+    env_params = config.scenario.get_env_params()
+    
+    train_env = TetrisEnv(
+        render_mode=env_params.get("render_mode"),
+        reward_params=reward_params
+    )
+    train_env = Monitor(train_env, str(log_path / "train_monitor"))
     train_env = DummyVecEnv([lambda: train_env])
     
-    eval_env = TetrisEnv()
-    eval_env = Monitor(eval_env, log_path / "eval_monitor")
+    eval_env = TetrisEnv(
+        render_mode=env_params.get("render_mode"),
+        reward_params=reward_params
+    )
+    eval_env = Monitor(eval_env, str(log_path / "eval_monitor"))
     eval_env = DummyVecEnv([lambda: eval_env])
     
-    # Create model
+    # Create model with agent config
     print("Initializing PPO model...")
-    model = PPO(
-        "MlpPolicy",
-        train_env,
-        learning_rate=learning_rate,
-        n_steps=n_steps,
-        batch_size=batch_size,
-        n_epochs=n_epochs,
-        gamma=gamma,
-        verbose=verbose,
-        tensorboard_log=str(tensorboard_path),
-        device="auto",
-    )
+    model_kwargs = config.agent.to_dict()
+    model_kwargs["tensorboard_log"] = str(tensorboard_path)
+    model = PPO(config.agent.algorithm, train_env, **model_kwargs)
     
     # Setup callbacks
     visualizer = TrainingVisualizer(log_dir=str(log_path))
