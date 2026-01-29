@@ -46,43 +46,84 @@ def test_environment():
     
     try:
         from tetris.rl.env import TetrisEnv, state_to_features
+        from tetris.core.constants import TOTAL_PLAYFIELD_HEIGHT, PLAYFIELD_WIDTH
         print("✓ TetrisEnv imported")
     except ImportError as e:
         print(f"✗ Failed to import TetrisEnv: {e}")
         return False
     
+    # Test features mode
     try:
-        env = TetrisEnv()
-        print("✓ Environment created")
-    except Exception as e:
-        print(f"✗ Failed to create environment: {e}")
-        return False
-    
-    try:
+        env = TetrisEnv(observation_mode="features", next_queue_size=5)
+        print("✓ Features mode environment created")
+        
         obs, info = env.reset()
         print(f"✓ Environment reset - observation shape: {obs.shape}")
-        assert obs.shape == (23,), f"Expected shape (23,), got {obs.shape}"
+        # With next_queue_size=5, features mode has 23 + 5 = 28 features
+        expected_shape = (28,)  # 23 base + 5 next queue
+        assert obs.shape == expected_shape, f"Expected shape {expected_shape}, got {obs.shape}"
+        
+        # Test a few random actions
+        for i in range(3):
+            action = env.action_space.sample()
+            obs, reward, done, truncated, info = env.step(action)
+            print(f"  Step {i+1}: action={action}, reward={reward:.2f}, done={done}, valid_actions={info.get('valid_actions', 'N/A')}")
+            if done:
+                obs, info = env.reset()
+        
+        env.close()
     except Exception as e:
-        print(f"✗ Failed to reset environment: {e}")
+        print(f"✗ Features mode failed: {e}")
+        import traceback
+        traceback.print_exc()
         return False
     
+    # Test board_channels mode
     try:
+        env = TetrisEnv(
+            observation_mode="board_channels",
+            next_queue_size=5,
+            include_ghost=True
+        )
+        print("✓ Board channels mode environment created")
+        
+        obs, info = env.reset()
+        print(f"✓ Environment reset - observation shape: {obs.shape}")
+        # Board: H*W*C + 7 (current piece) + 5*7 (next queue)
+        channels = 3  # include_ghost=True
+        board_size = TOTAL_PLAYFIELD_HEIGHT * PLAYFIELD_WIDTH * channels
+        piece_info_size = 7 + 5 * 7
+        expected_shape = (board_size + piece_info_size,)
+        assert obs.shape == expected_shape, f"Expected shape {expected_shape}, got {obs.shape}"
+        
         # Test a few random actions
-        for i in range(5):
+        for i in range(3):
             action = env.action_space.sample()
             obs, reward, done, truncated, info = env.step(action)
             print(f"  Step {i+1}: action={action}, reward={reward:.2f}, done={done}")
             if done:
                 obs, info = env.reset()
+        
+        env.close()
     except Exception as e:
-        print(f"✗ Failed to step environment: {e}")
+        print(f"✗ Board channels mode failed: {e}")
+        import traceback
+        traceback.print_exc()
         return False
     
+    # Test simplified reward
     try:
+        env = TetrisEnv(use_simple_reward=True)
+        obs, info = env.reset()
+        action = env.action_space.sample()
+        obs, reward, done, truncated, info = env.step(action)
+        print(f"✓ Simplified reward works - reward: {reward:.2f}")
         env.close()
-        print("✓ Environment closed")
     except Exception as e:
-        print(f"⚠ Failed to close environment: {e}")
+        print(f"✗ Simplified reward failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
     
     return True
 
@@ -94,17 +135,27 @@ def test_feature_extraction():
     try:
         import numpy as np
         from tetris.core.game_engine import GameEngine
-        from tetris.rl.env import state_to_features
+        from tetris.rl.env import state_to_features, state_to_board_channels
         
         engine = GameEngine()
-        features = state_to_features(engine.state)
         
+        # Test feature-based extraction
+        features = state_to_features(engine.state)
         assert features.shape == (23,), f"Expected 23 features, got {features.shape[0]}"
         assert not np.isnan(features).any(), "Features contain NaN"
         assert not np.isinf(features).any(), "Features contain Inf"
-        
         print(f"✓ Feature extraction works - shape: {features.shape}")
         print(f"  Feature range: [{features.min():.2f}, {features.max():.2f}]")
+        
+        # Test board channels extraction
+        board_channels = state_to_board_channels(engine.state, engine=engine, include_ghost=True)
+        expected_shape = (TOTAL_PLAYFIELD_HEIGHT, PLAYFIELD_WIDTH, 3)
+        assert board_channels.shape == expected_shape, f"Expected shape {expected_shape}, got {board_channels.shape}"
+        assert not np.isnan(board_channels).any(), "Board channels contain NaN"
+        assert not np.isinf(board_channels).any(), "Board channels contain Inf"
+        print(f"✓ Board channels extraction works - shape: {board_channels.shape}")
+        
+        from tetris.core.constants import TOTAL_PLAYFIELD_HEIGHT, PLAYFIELD_WIDTH
         return True
     except Exception as e:
         print(f"✗ Feature extraction failed: {e}")
@@ -120,7 +171,7 @@ def test_reward_calculation():
     try:
         import numpy as np
         from tetris.core.game_engine import GameEngine
-        from tetris.rl.env import calculate_reward
+        from tetris.rl.env import calculate_reward, calculate_reward_simple
         
         engine = GameEngine()
         prev_state = engine.state
@@ -128,12 +179,18 @@ def test_reward_calculation():
         # Make a move
         engine.state = engine.apply_move("right")
         
+        # Test advanced reward
         reward = calculate_reward(prev_state, engine.state, False)
-        
         assert isinstance(reward, (int, float)), "Reward should be numeric"
         assert not np.isnan(reward), "Reward should not be NaN"
+        print(f"✓ Advanced reward calculation works - reward: {reward:.2f}")
         
-        print(f"✓ Reward calculation works - reward: {reward:.2f}")
+        # Test simplified reward
+        simple_reward = calculate_reward_simple(prev_state, engine.state, False)
+        assert isinstance(simple_reward, (int, float)), "Simple reward should be numeric"
+        assert not np.isnan(simple_reward), "Simple reward should not be NaN"
+        print(f"✓ Simplified reward calculation works - reward: {simple_reward:.2f}")
+        
         return True
     except Exception as e:
         print(f"✗ Reward calculation failed: {e}")

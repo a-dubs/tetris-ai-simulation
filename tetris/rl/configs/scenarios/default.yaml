@@ -44,9 +44,18 @@ rewards:
 # Environment settings
 environment:
   # Action space
-  max_placements: 20  # Maximum number of placements to consider
+  max_placements: 50  # Maximum number of placements to consider
   
-  # Observation space
+  # Observation settings
+  observation_mode: "features"  # "features" or "board_channels"
+  next_queue_size: 5  # Number of next pieces to include
+  include_ghost: true  # Include ghost piece (for board_channels mode)
+  
+  # Reward function selection
+  use_simple_reward: false  # Use simplified reward (with line clearing)
+  use_minimal_reward: false  # Use minimal reward (ONLY stack height + holes)
+  
+  # Feature normalization
   feature_normalization:
     score_divisor: 10000.0  # Normalize score by this value
   

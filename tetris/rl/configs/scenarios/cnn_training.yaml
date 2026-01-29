@@ -1,0 +1,34 @@
+# CNN training scenario configuration
+# Uses board_channels observation mode for CNN policies
+
+# Simplified reward parameters
+rewards:
+  lines_cleared: 1.0      # Base reward per line
+  tetris_bonus: 2.0       # Extra multiplier for 4-line clear
+  holes_penalty: -0.5     # Penalty per new hole
+  aggregate_height_penalty: -0.01  # Penalty per unit of aggregate height
+  game_over: -1000.0      # Large penalty for game over
+
+# Environment settings
+environment:
+  # Action space
+  max_placements: 50
+  
+  # Observation settings
+  observation_mode: "board_channels"  # Use multi-channel board for CNN
+  next_queue_size: 5
+  include_ghost: true  # Include ghost piece channel
+  
+  # Reward function selection
+  use_simple_reward: true  # Use simplified reward
+  use_minimal_reward: false
+  
+  # Rendering
+  render_mode: null
+  render_fps: 10
+
+# Training scenario settings
+training:
+  max_steps_per_episode: 10000
+  eval_episodes: 10
+  eval_freq: 10000

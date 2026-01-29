@@ -73,6 +73,7 @@ Agent configs define hyperparameters and model architecture:
 - **`default.yaml`**: Standard PPO configuration (64x64 network)
 - **`large_network.yaml`**: Larger network (128x128x64) for complex learning
 - **`fast_training.yaml`**: Smaller network, higher learning rate for quick iteration
+- **`minimal_fast.yaml`**: Very high learning rate (1e-3) for minimal reward training
 
 ### Agent Config Structure
 
@@ -99,6 +100,8 @@ Scenario configs define reward functions and environment settings:
 - **`aggressive_rewards.yaml`**: Higher rewards, stronger penalties
 - **`conservative_rewards.yaml`**: Lower rewards, gentler penalties
 - **`survival_focused.yaml`**: Emphasizes staying alive over scoring
+- **`minimal_reward.yaml`**: Ultra-simple reward (ONLY stack height + holes, no line rewards)
+- **`cnn_training.yaml`**: CNN-friendly config with board_channels observation mode
 
 ### Scenario Config Structure
 
@@ -116,6 +119,23 @@ rewards:
   height_penalty: 2.0
   hole_penalty: 5.0
   variance_penalty: 0.5
+
+environment:
+  # Observation settings
+  observation_mode: "features"  # "features" or "board_channels"
+  next_queue_size: 5  # Number of next pieces
+  include_ghost: true  # Include ghost piece (for board_channels)
+  
+  # Reward function selection
+  use_simple_reward: false  # Use simplified reward
+  use_minimal_reward: false  # Use minimal reward (ONLY stack height + holes)
+  
+  # Action space
+  max_placements: 50
+  
+  # Rendering
+  render_mode: null  # "human", "rgb_array", or null
+  render_fps: 10
 ```
 
 ## Creating Custom Configs
@@ -215,6 +235,25 @@ uv run python -m tetris.rl.training train \
 uv run python -m tetris.rl.training train \
     --agent-config default \
     --scenario-config survival_focused \
+    --timesteps 1000000
+```
+
+### Example 4: Minimal Reward (Simplest)
+
+```bash
+# Ultra-simple reward: ONLY stack height + holes
+uv run python -m tetris.rl.training train \
+    --scenario-config minimal_reward \
+    --timesteps 100000
+```
+
+### Example 5: CNN Training
+
+```bash
+# CNN-friendly config with board_channels observation
+uv run python -m tetris.rl.training train \
+    --scenario-config cnn_training \
+    --agent-config large_network \
     --timesteps 1000000
 ```
 

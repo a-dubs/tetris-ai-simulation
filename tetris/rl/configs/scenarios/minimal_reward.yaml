@@ -1,0 +1,41 @@
+# Minimal reward scenario configuration
+# Ultra-simple reward: ONLY stack height and holes
+# No explicit reward for clearing lines - agent must learn it implicitly
+
+# Minimal reward parameters
+# CRITICAL: Rewards are based on CHANGE from previous state, not absolute state
+rewards:
+  height_increase_penalty: -2.0   # Penalty for increasing aggregate height
+  holes_created_penalty: -10.0    # Strong penalty for creating new holes
+  max_height_penalty: -20.0       # VERY strong penalty for max column height (prevents vertical stacking)
+  survival_bonus: 5.0             # Positive reward for surviving (larger to offset penalties)
+  game_over: -1000.0              # Large terminal penalty
+
+# Environment settings
+environment:
+  # Action space
+  max_placements: 50
+  
+  # Observation settings
+  observation_mode: "features"  # Use features for simplicity
+  next_queue_size: 5
+  include_ghost: false  # Not needed for features mode
+  
+  # Reward function selection
+  use_simple_reward: false
+  use_minimal_reward: true  # Enable minimal reward
+  
+  # Pretraining with Fast AI (for sanity checking RL harness)
+  pretrain_with_fast_ai: true  # Initialize weights from Fast AI decisions
+  pretrain_expert_episodes: 100  # Number of Fast AI episodes to collect
+  pretrain_epochs: 10  # Epochs for behavioral cloning
+  
+  # Rendering
+  render_mode: null
+  render_fps: 10
+
+# Training scenario settings
+training:
+  max_steps_per_episode: 10000
+  eval_episodes: 10
+  eval_freq: 10000

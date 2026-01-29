@@ -109,7 +109,12 @@ class ScenarioConfig:
     
     # Environment settings
     environment: Dict[str, Any] = field(default_factory=lambda: {
-        "max_placements": 20,
+        "max_placements": 50,
+        "observation_mode": "features",  # "features" or "board_channels"
+        "use_simple_reward": False,
+        "use_minimal_reward": False,
+        "next_queue_size": 5,
+        "include_ghost": True,
         "feature_normalization": {
             "score_divisor": 10000.0,
         },

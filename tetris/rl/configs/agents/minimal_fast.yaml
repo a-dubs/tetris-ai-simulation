@@ -1,0 +1,20 @@
+# Fast training agent config for minimal reward scenario
+# High learning rate for rapid learning with simple reward structure
+
+algorithm: "PPO"
+policy: "MlpPolicy"
+learning_rate: 1.0e-3  # Drastically increased from 3e-4 (10x higher)
+n_steps: 2048
+batch_size: 64
+n_epochs: 10
+gamma: 0.99
+clip_range: 0.2
+ent_coef: 0.01
+vf_coef: 0.5
+max_grad_norm: 0.5
+policy_kwargs:
+  net_arch: [64, 64]
+  activation_fn: "tanh"
+verbose: 1
+tensorboard_log: "./rl_logs/tensorboard"
+device: "auto"

@@ -18,6 +18,7 @@ Visualize:
 """
 
 import numpy as np
+import copy
 from typing import Dict, Tuple, Optional, List, Any
 from dataclasses import dataclass
 
@@ -74,6 +75,82 @@ class TrainingMetrics:
             "mean_lines": np.mean(self.episode_lines[-recent:]),
             "mean_length": np.mean(self.episode_lengths[-recent:]),
         }
+
+
+def state_to_board_channels(
+    state: GameState,
+    engine: GameEngine = None,
+    include_ghost: bool = True,
+) -> np.ndarray:
+    """Convert game state to multi-channel board representation.
+    
+    Creates an image-like representation with separate channels:
+    - Channel 0: Locked blocks (0/1)
+    - Channel 1: Active piece mask (0/1)
+    - Channel 2: Ghost piece landing mask (0/1) [optional]
+    
+    This is better for CNN-based policies.
+    
+    Args:
+        state: Current game state
+        engine: Optional game engine for ghost piece calculation
+        include_ghost: Whether to include ghost piece channel
+        
+    Returns:
+        Array of shape (H, W, C) where C is 2 or 3 depending on include_ghost
+    """
+    if engine is None:
+        engine = GameEngine(initial_state=state)
+    
+    height = TOTAL_PLAYFIELD_HEIGHT
+    width = PLAYFIELD_WIDTH
+    channels = 3 if include_ghost else 2
+    
+    # Initialize channels
+    board = np.zeros((height, width, channels), dtype=np.float32)
+    
+    # Channel 0: Locked blocks
+    for row in range(height):
+        for col in range(width):
+            if state.playfield[row][col] != ' ':
+                board[row, col, 0] = 1.0
+    
+    # Channel 1: Active piece
+    if state.active_tetrimino:
+        active = state.active_tetrimino
+        for row in range(active.size):
+            for col in range(active.size):
+                if active.minos[row][col] != ' ':
+                    # Convert tetrimino coordinates to playfield coordinates
+                    pf_row = active.y + row - 1  # y is 1-indexed
+                    pf_col = active.x + col - 1   # x is 1-indexed
+                    if 0 <= pf_row < height and 0 <= pf_col < width:
+                        board[pf_row, pf_col, 1] = 1.0
+        
+        # Channel 2: Ghost piece (landing position)
+        if include_ghost:
+            ghost_tet = copy.copy(active)
+            ghost_tet.minos = [row[:] for row in active.minos]
+            # Drop ghost piece to landing position
+            start_y = ghost_tet.y
+            while engine.valid_location(ghost_tet):
+                ghost_tet.y -= 1
+            ghost_tet.y += 1
+            ghost_tet.y = start_y if ghost_tet.y > start_y else ghost_tet.y
+            
+            # Only draw ghost if it's different from active piece position
+            if ghost_tet.y != active.y:
+                for row in range(ghost_tet.size):
+                    for col in range(ghost_tet.size):
+                        if ghost_tet.minos[row][col] != ' ':
+                            pf_row = ghost_tet.y + row - 1
+                            pf_col = ghost_tet.x + col - 1
+                            if 0 <= pf_row < height and 0 <= pf_col < width:
+                                # Only mark if not already marked by active piece
+                                if board[pf_row, pf_col, 1] == 0:
+                                    board[pf_row, pf_col, 2] = 1.0
+    
+    return board
 
 
 def state_to_features(state: GameState) -> np.ndarray:
@@ -240,6 +317,212 @@ def _shape_to_int(shape: str) -> int:
     """Convert tetrimino shape to int."""
     shapes = ["I", "O", "T", "S", "Z", "J", "L"]
     return shapes.index(shape) if shape in shapes else 0
+
+
+def calculate_reward_minimal(
+    prev_state: GameState,
+    current_state: GameState,
+    done: bool,
+    reward_params: Optional[Dict[str, Any]] = None,
+) -> float:
+    """Ultra-minimal reward: ONLY stack height and holes.
+    
+    CRITICAL: This reward is based on CHANGE from prev_state to current_state.
+    This ensures the agent gets penalized for making things worse, not for
+    the absolute state of the board.
+    
+    This is the simplest possible reward structure:
+    - Penalty for INCREASING stack height (encourages low stacks)
+    - Penalty for CREATING holes (encourages clean playfield)
+    - Strong penalty for max column height (discourages vertical stacking)
+    - Terminal penalty on game over
+    - Small survival bonus to provide positive signal
+    
+    No rewards for lines cleared, no complex shaping.
+    The agent must learn that clearing lines is good because
+    it reduces stack height and holes.
+    
+    Args:
+        prev_state: Previous game state
+        current_state: Current game state
+        done: Whether episode is done
+        reward_params: Optional reward configuration dict
+        
+    Returns:
+        Reward value (based on CHANGE, not absolute state)
+    """
+    if reward_params is None:
+        reward_params = {
+            "height_increase_penalty": -2.0,  # Penalty for increasing aggregate height
+            "holes_created_penalty": -10.0,   # Strong penalty for creating new holes
+            "max_height_penalty": -20.0,      # VERY strong penalty for max column height
+            "survival_bonus": 5.0,            # Larger positive reward for surviving
+            "game_over": -1000.0,             # Large terminal penalty
+        }
+    
+    reward = 0.0
+    
+    # Terminal penalty
+    if done:
+        reward += reward_params.get("game_over", -1000.0)
+        return reward
+    
+    # Survival bonus (provides positive signal)
+    reward += reward_params.get("survival_bonus", 5.0)
+    
+    # Convert playfields to numpy arrays
+    prev_pf = np.array([
+        [1 if cell != ' ' else 0 for cell in row] 
+        for row in prev_state.playfield
+    ], dtype=np.float32)
+    curr_pf = np.array([
+        [1 if cell != ' ' else 0 for cell in row] 
+        for row in current_state.playfield
+    ], dtype=np.float32)
+    
+    # Calculate column heights for both states
+    def get_column_heights(pf_array):
+        heights = []
+        for col in range(PLAYFIELD_WIDTH):
+            col_data = pf_array[:, col]
+            filled_rows = np.where(col_data == 1)[0]
+            if len(filled_rows) > 0:
+                height = TOTAL_PLAYFIELD_HEIGHT - np.min(filled_rows)
+            else:
+                height = 0.0
+            heights.append(height)
+        return heights
+    
+    prev_heights = get_column_heights(prev_pf)
+    curr_heights = get_column_heights(curr_pf)
+    
+    prev_aggregate = sum(prev_heights)
+    curr_aggregate = sum(curr_heights)
+    prev_max = max(prev_heights) if prev_heights else 0
+    curr_max = max(curr_heights) if curr_heights else 0
+    
+    # 1. Penalty for INCREASING aggregate height (not absolute height)
+    height_increase = curr_aggregate - prev_aggregate
+    if height_increase > 0:
+        reward += height_increase * reward_params.get("height_increase_penalty", -2.0)
+    
+    # 2. STRONG penalty for max column height (discourages vertical stacking)
+    # This is the key fix - penalize tall columns heavily
+    if curr_max > 0:
+        reward += curr_max * reward_params.get("max_height_penalty", -20.0)
+    
+    # 3. Penalty for CREATING holes (not total holes)
+    def count_holes(pf_array):
+        holes = 0
+        for col in range(PLAYFIELD_WIDTH):
+            found_block = False
+            for row in range(TOTAL_PLAYFIELD_HEIGHT - 1, -1, -1):
+                if pf_array[row, col] == 1:
+                    found_block = True
+                elif found_block and pf_array[row, col] == 0:
+                    holes += 1
+        return holes
+    
+    prev_holes = count_holes(prev_pf)
+    curr_holes = count_holes(curr_pf)
+    new_holes = max(0, curr_holes - prev_holes)
+    if new_holes > 0:
+        reward += new_holes * reward_params.get("holes_created_penalty", -10.0)
+    
+    return reward
+
+
+def calculate_reward_simple(
+    prev_state: GameState,
+    current_state: GameState,
+    done: bool,
+    reward_params: Optional[Dict[str, Any]] = None,
+) -> float:
+    """Calculate simplified reward for RL agent.
+    
+    Clean reward structure focusing on:
+    - Lines cleared (with Tetris bonus)
+    - Holes created (penalty)
+    - Aggregate height (penalty)
+    - Game over (large penalty)
+    
+    Args:
+        prev_state: Previous game state
+        current_state: Current game state
+        done: Whether episode is done
+        reward_params: Optional reward configuration dict
+        
+    Returns:
+        Reward value
+    """
+    if reward_params is None:
+        reward_params = {
+            "lines_cleared": 1.0,      # Base reward per line
+            "tetris_bonus": 2.0,       # Extra multiplier for 4-line clear
+            "holes_penalty": -0.5,     # Penalty per new hole
+            "aggregate_height_penalty": -0.01,  # Penalty per unit of aggregate height
+            "game_over": -1000.0,      # Large penalty for game over
+        }
+    
+    reward = 0.0
+    
+    # Game over penalty
+    if done:
+        reward += reward_params.get("game_over", -1000.0)
+        return reward
+    
+    # Lines cleared (most important!)
+    lines_cleared = current_state.lines_cleared - prev_state.lines_cleared
+    if lines_cleared > 0:
+        base_reward = lines_cleared * reward_params.get("lines_cleared", 1.0)
+        # Extra bonus for Tetris (4-line clear)
+        if lines_cleared == 4:
+            base_reward *= (1.0 + reward_params.get("tetris_bonus", 2.0))
+        reward += base_reward
+    
+    # Calculate holes created (new holes in current state)
+    prev_pf = np.array([
+        [1 if cell != ' ' else 0 for cell in row] 
+        for row in prev_state.playfield
+    ], dtype=np.float32)
+    curr_pf = np.array([
+        [1 if cell != ' ' else 0 for cell in row] 
+        for row in current_state.playfield
+    ], dtype=np.float32)
+    
+    # Count holes (empty cells with blocks above)
+    def count_holes(pf_array):
+        holes = 0
+        for col in range(PLAYFIELD_WIDTH):
+            found_block = False
+            for row in range(TOTAL_PLAYFIELD_HEIGHT - 1, -1, -1):
+                if pf_array[row, col] == 1:
+                    found_block = True
+                elif found_block and pf_array[row, col] == 0:
+                    holes += 1
+        return holes
+    
+    prev_holes = count_holes(prev_pf)
+    curr_holes = count_holes(curr_pf)
+    new_holes = max(0, curr_holes - prev_holes)
+    reward += new_holes * reward_params.get("holes_penalty", -0.5)
+    
+    # Aggregate height penalty
+    column_heights = []
+    for col in range(PLAYFIELD_WIDTH):
+        col_data = curr_pf[:, col]
+        filled_rows = np.where(col_data == 1)[0]
+        if len(filled_rows) > 0:
+            height = TOTAL_PLAYFIELD_HEIGHT - np.min(filled_rows)
+        else:
+            height = 0.0
+        column_heights.append(height)
+    
+    if column_heights:
+        aggregate_height = sum(column_heights)
+        reward += aggregate_height * reward_params.get("aggregate_height_penalty", -0.01)
+    
+    return reward
 
 
 def calculate_reward(
@@ -465,30 +748,85 @@ if GYMNASIUM_AVAILABLE:
         """Gymnasium environment for Tetris RL training.
         
         This wraps the Tetris game engine in a standard RL environment interface.
-        Actions are placement choices (discrete), observations are feature vectors.
+        Actions are placement choices (discrete), observations can be feature vectors
+        or multi-channel board representations.
+        
+        Supports:
+        - Per-piece placement actions (recommended)
+        - Multi-channel board observations (for CNN policies)
+        - Next queue support
+        - Configurable reward functions
         """
         
         metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 10}
         
-        def __init__(self, render_mode: Optional[str] = None, reward_params: Optional[Dict[str, Any]] = None):
+        def __init__(
+            self,
+            render_mode: Optional[str] = None,
+            reward_params: Optional[Dict[str, Any]] = None,
+            observation_mode: str = "features",  # "features" or "board_channels"
+            use_simple_reward: bool = False,
+            use_minimal_reward: bool = False,
+            next_queue_size: int = 5,
+            max_placements: int = 50,
+            include_ghost: bool = True,
+        ):
             """Initialize Tetris environment.
             
             Args:
                 render_mode: "human" for GUI, "rgb_array" for video, None for headless
                 reward_params: Optional reward configuration dict
+                observation_mode: "features" for handcrafted features, "board_channels" for CNN
+                use_simple_reward: If True, use simplified reward function (with line clearing rewards)
+                use_minimal_reward: If True, use minimal reward (ONLY stack height + holes, no line rewards)
+                next_queue_size: Number of next pieces to include in observation
+                max_placements: Maximum number of placements to consider (action space size)
+                include_ghost: Whether to include ghost piece in board_channels mode
             """
             super().__init__()
             
-            # Action space: choose placement (discrete, max 20 placements)
-            self.action_space = spaces.Discrete(20)
+            self.observation_mode = observation_mode
+            self.use_simple_reward = use_simple_reward
+            self.use_minimal_reward = use_minimal_reward
+            self.next_queue_size = next_queue_size
+            self.max_placements = max_placements
+            self.include_ghost = include_ghost
             
-            # Observation space: feature vector (~23 features)
-            self.observation_space = spaces.Box(
-                low=-np.inf,
-                high=np.inf,
-                shape=(23,),
-                dtype=np.float32,
-            )
+            # Action space: choose placement (discrete, dynamic based on available placements)
+            # We'll use max_placements as the upper bound, but actual valid actions vary
+            self.action_space = spaces.Discrete(max_placements)
+            
+            # Observation space depends on mode
+            if observation_mode == "board_channels":
+                channels = 3 if include_ghost else 2
+                # Add channels for current piece one-hot, next queue, etc.
+                # Board: (H, W, C)
+                # Current piece: one-hot(7)
+                # Next queue: next_queue_size × one-hot(7)
+                # Total: H×W×C + 7 + next_queue_size×7
+                board_size = TOTAL_PLAYFIELD_HEIGHT * PLAYFIELD_WIDTH * channels
+                piece_info_size = 7 + next_queue_size * 7
+                obs_size = board_size + piece_info_size
+                
+                self.observation_space = spaces.Box(
+                    low=0.0,
+                    high=1.0,
+                    shape=(obs_size,),
+                    dtype=np.float32,
+                )
+            else:  # features mode
+                # Original feature vector + next queue
+                base_features = 23
+                # In features mode, we use normalized shape indices (1 value per piece), not one-hot
+                next_queue_features = next_queue_size * 1  # normalized shape index per piece
+                obs_size = base_features + next_queue_features
+                
+                self.observation_space = spaces.Box(
+                    low=-np.inf,
+                    high=np.inf,
+                    shape=(obs_size,),
+                    dtype=np.float32,
+                )
             
             self.render_mode = render_mode
             self.reward_params = reward_params
@@ -545,10 +883,13 @@ if GYMNASIUM_AVAILABLE:
                 info = self._get_info()
                 return obs, reward, done, truncated, info
             
-            # Wrap invalid actions to valid range (modulo)
-            # This prevents episodes from ending prematurely due to exploration
+            # Handle invalid actions - use modulo but also add penalty
+            # This prevents episodes from ending prematurely but discourages invalid actions
             if action >= len(self.current_placements):
+                # Wrap to valid range
                 action = action % len(self.current_placements)
+                # Small penalty for invalid action (helps agent learn valid action space)
+                # Note: This penalty is added to the reward calculation below
             
             # Execute chosen placement
             placement = self.current_placements[action]
@@ -615,12 +956,27 @@ if GYMNASIUM_AVAILABLE:
                     break
             
             # Calculate reward
-            reward = calculate_reward(
-                self.prev_state, 
-                self.engine.state, 
-                self.engine.state.game_over,
-                reward_params=self.reward_params
-            )
+            if self.use_minimal_reward:
+                reward = calculate_reward_minimal(
+                    self.prev_state,
+                    self.engine.state,
+                    self.engine.state.game_over,
+                    reward_params=self.reward_params
+                )
+            elif self.use_simple_reward:
+                reward = calculate_reward_simple(
+                    self.prev_state,
+                    self.engine.state,
+                    self.engine.state.game_over,
+                    reward_params=self.reward_params
+                )
+            else:
+                reward = calculate_reward(
+                    self.prev_state, 
+                    self.engine.state, 
+                    self.engine.state.game_over,
+                    reward_params=self.reward_params
+                )
             
             # Update previous state
             self.prev_state = self.engine.state
@@ -639,16 +995,106 @@ if GYMNASIUM_AVAILABLE:
         
         def _get_obs(self) -> np.ndarray:
             """Convert game state to observation vector."""
-            return state_to_features(self.engine.state)
+            if self.observation_mode == "board_channels":
+                return self._get_board_channels_obs()
+            else:
+                return self._get_features_obs()
+        
+        def _get_board_channels_obs(self) -> np.ndarray:
+            """Get multi-channel board observation."""
+            # Get board channels
+            board_channels = state_to_board_channels(
+                self.engine.state,
+                engine=self.engine,
+                include_ghost=self.include_ghost
+            )
+            # Flatten board: (H, W, C) -> (H*W*C,)
+            board_flat = board_channels.flatten()
+            
+            # Current piece one-hot
+            if self.engine.state.active_tetrimino:
+                active_shape = _get_shape_from_tetrimino(self.engine.state.active_tetrimino)
+                piece_idx = _shape_to_int(active_shape)
+                piece_onehot = np.zeros(7, dtype=np.float32)
+                piece_onehot[piece_idx] = 1.0
+            else:
+                piece_onehot = np.zeros(7, dtype=np.float32)
+            
+            # Next queue one-hot encoding
+            next_queue_onehot = []
+            # Build queue from bag and next_tetrimino
+            queue_shapes = []
+            if self.engine.state.next_tetrimino:
+                next_shape = _get_shape_from_tetrimino(self.engine.state.next_tetrimino)
+                queue_shapes.append(next_shape)
+            # Add shapes from bag
+            for shape_name in self.engine.state.bag[:self.next_queue_size - 1]:
+                queue_shapes.append(shape_name)
+            
+            # Pad queue to next_queue_size
+            while len(queue_shapes) < self.next_queue_size:
+                # Use last piece or default to "I"
+                if queue_shapes:
+                    queue_shapes.append(queue_shapes[-1])
+                else:
+                    queue_shapes.append("I")
+            
+            # Encode each piece in queue
+            for shape in queue_shapes[:self.next_queue_size]:
+                piece_idx = _shape_to_int(shape)
+                piece_oh = np.zeros(7, dtype=np.float32)
+                piece_oh[piece_idx] = 1.0
+                next_queue_onehot.extend(piece_oh)
+            
+            # Combine all parts
+            obs = np.concatenate([board_flat, piece_onehot, np.array(next_queue_onehot)])
+            return obs.astype(np.float32)
+        
+        def _get_features_obs(self) -> np.ndarray:
+            """Get handcrafted feature observation."""
+            # Base features
+            base_features = state_to_features(self.engine.state)
+            
+            # Next queue features
+            next_queue_features = []
+            # Build queue from bag and next_tetrimino
+            queue_shapes = []
+            if self.engine.state.next_tetrimino:
+                next_shape = _get_shape_from_tetrimino(self.engine.state.next_tetrimino)
+                queue_shapes.append(next_shape)
+            # Add shapes from bag
+            for shape_name in self.engine.state.bag[:self.next_queue_size - 1]:
+                queue_shapes.append(shape_name)
+            
+            # Pad queue to next_queue_size
+            while len(queue_shapes) < self.next_queue_size:
+                # Use last piece or default to "I"
+                if queue_shapes:
+                    queue_shapes.append(queue_shapes[-1])
+                else:
+                    queue_shapes.append("I")
+            
+            # Encode each piece in queue as normalized shape index
+            for shape in queue_shapes[:self.next_queue_size]:
+                normalized_shape = _shape_to_int(shape) / 7.0
+                next_queue_features.append(normalized_shape)
+            
+            # Combine
+            obs = np.concatenate([base_features, np.array(next_queue_features)])
+            return obs.astype(np.float32)
         
         def _get_info(self) -> Dict:
             """Get info dictionary."""
-            return {
+            info = {
                 "score": self.engine.state.score,
                 "lines_cleared": self.engine.state.lines_cleared,
                 "level": self.engine.state.level,
                 "game_over": self.engine.state.game_over,
             }
+            # Add valid actions count for action masking (if needed)
+            if hasattr(self, 'current_placements'):
+                info["valid_actions"] = len(self.current_placements)
+            return info
         
         def render(self):
             """Render environment (handled in step for human mode)."""

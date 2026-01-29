@@ -41,6 +41,14 @@ from tetris.rl.env import TetrisEnv, TrainingMetrics
 from tetris.rl.visualization import TrainingVisualizer
 from tetris.rl.config import RLConfig, load_config
 
+# Try to import pretraining (requires torch)
+try:
+    from tetris.rl.pretrain import create_pretrained_model
+    PRETRAIN_AVAILABLE = True
+except ImportError:
+    PRETRAIN_AVAILABLE = False
+    print("Warning: Pretraining not available (PyTorch required)")
+
 
 class TrainingCallback:
     """Custom callback to track metrics during training."""
@@ -98,6 +106,11 @@ def train_agent(
     config: Optional[RLConfig] = None,
     agent_config: Optional[str] = None,
     scenario_config: Optional[str] = None,
+    observation_mode: Optional[str] = None,
+    use_simple_reward: Optional[bool] = None,
+    use_minimal_reward: Optional[bool] = None,
+    next_queue_size: Optional[int] = None,
+    include_ghost: Optional[bool] = None,
 ):
     """Train RL agent with comprehensive logging and visualization.
     
@@ -168,17 +181,38 @@ def train_agent(
     reward_params = config.scenario.get_reward_params()
     env_params = config.scenario.get_env_params()
     
-    train_env = TetrisEnv(
-        render_mode=env_params.get("render_mode"),
-        reward_params=reward_params
-    )
+    # Build environment kwargs from config, then override with CLI if provided
+    env_kwargs = {
+        "render_mode": env_params.get("render_mode"),
+        "reward_params": reward_params,
+        # Read from config first
+        "observation_mode": env_params.get("observation_mode", "features"),
+        "use_simple_reward": env_params.get("use_simple_reward", False),
+        "use_minimal_reward": env_params.get("use_minimal_reward", False),
+        "next_queue_size": env_params.get("next_queue_size", 5),
+        "include_ghost": env_params.get("include_ghost", True),
+        "max_placements": env_params.get("max_placements", 50),
+    }
+    
+    # Override with CLI arguments if provided (CLI takes precedence)
+    if observation_mode is not None:
+        env_kwargs["observation_mode"] = observation_mode
+    if use_minimal_reward is not None:
+        env_kwargs["use_minimal_reward"] = use_minimal_reward
+        env_kwargs["use_simple_reward"] = False  # Can't use both
+    elif use_simple_reward is not None:
+        env_kwargs["use_simple_reward"] = use_simple_reward
+        env_kwargs["use_minimal_reward"] = False  # Can't use both
+    if next_queue_size is not None:
+        env_kwargs["next_queue_size"] = next_queue_size
+    if include_ghost is not None:
+        env_kwargs["include_ghost"] = include_ghost
+    
+    train_env = TetrisEnv(**env_kwargs)
     train_env = Monitor(train_env, str(log_path / "train_monitor"))
     train_env = DummyVecEnv([lambda: train_env])
     
-    eval_env = TetrisEnv(
-        render_mode=env_params.get("render_mode"),
-        reward_params=reward_params
-    )
+    eval_env = TetrisEnv(**env_kwargs)
     eval_env = Monitor(eval_env, str(log_path / "eval_monitor"))
     eval_env = DummyVecEnv([lambda: eval_env])
     
@@ -186,9 +220,33 @@ def train_agent(
     print("Initializing PPO model...")
     model_kwargs = config.agent.to_dict()
     model_kwargs["tensorboard_log"] = str(tensorboard_path)
-    # Extract policy from kwargs (it's a positional arg to PPO)
-    policy = model_kwargs.pop("policy")
-    model = PPO(policy, train_env, **model_kwargs)
+    
+    # Check if pretraining is requested
+    pretrain = env_params.get("pretrain_with_fast_ai", False)
+    num_expert_episodes = env_params.get("pretrain_expert_episodes", 100)
+    pretrain_epochs = env_params.get("pretrain_epochs", 10)
+    
+    if pretrain and PRETRAIN_AVAILABLE:
+        print(f"\nPretraining enabled: {num_expert_episodes} expert episodes, {pretrain_epochs} epochs")
+        # Create unwrapped env for pretraining (DummyVecEnv changes reset signature)
+        pretrain_env = TetrisEnv(**env_kwargs)
+        # Use pretraining function with unwrapped env
+        model = create_pretrained_model(
+            pretrain_env,
+            model_kwargs.copy(),
+            pretrain=True,
+            num_expert_episodes=num_expert_episodes,
+            pretrain_epochs=pretrain_epochs,
+            save_path=str(log_path / f"{config.model_name}_pretrained"),
+        )
+        # Wrap the pretrained model's env back to DummyVecEnv for training
+        # (model is already created, so we just need to make sure train_env matches)
+    else:
+        if pretrain and not PRETRAIN_AVAILABLE:
+            print("Warning: Pretraining requested but PyTorch not available. Skipping pretraining.")
+        # Extract policy from kwargs (it's a positional arg to PPO)
+        policy = model_kwargs.pop("policy")
+        model = PPO(policy, train_env, **model_kwargs)
     
     # Setup callbacks
     visualizer = TrainingVisualizer(log_dir=str(log_path))
@@ -430,6 +488,18 @@ def main():
                              help="Evaluation frequency")
     train_parser.add_argument("--render-every", type=int, default=0,
                              help="Render every N episodes (0 to disable)")
+    train_parser.add_argument("--observation-mode", type=str, choices=["features", "board_channels"],
+                             default=None, help="Observation mode: 'features' or 'board_channels'")
+    train_parser.add_argument("--use-simple-reward", action="store_true",
+                             help="Use simplified reward function (with line clearing rewards)")
+    train_parser.add_argument("--use-minimal-reward", action="store_true",
+                             help="Use minimal reward (ONLY stack height + holes, no line rewards)")
+    train_parser.add_argument("--next-queue-size", type=int, default=None,
+                             help="Number of next pieces to include in observation (default: 5)")
+    train_parser.add_argument("--include-ghost", action="store_true", default=None,
+                             help="Include ghost piece in board_channels mode")
+    train_parser.add_argument("--no-ghost", dest="include_ghost", action="store_false",
+                             help="Don't include ghost piece in board_channels mode")
     
     # Evaluate command
     eval_parser = subparsers.add_parser("evaluate", help="Evaluate trained agent")
@@ -471,6 +541,16 @@ def main():
             train_kwargs["learning_rate"] = args.lr
         if args.batch_size is not None:
             train_kwargs["batch_size"] = args.batch_size
+        if args.observation_mode is not None:
+            train_kwargs["observation_mode"] = args.observation_mode
+        if args.use_simple_reward:
+            train_kwargs["use_simple_reward"] = True
+        if args.use_minimal_reward:
+            train_kwargs["use_minimal_reward"] = True
+        if args.next_queue_size is not None:
+            train_kwargs["next_queue_size"] = args.next_queue_size
+        if args.include_ghost is not None:
+            train_kwargs["include_ghost"] = args.include_ghost
         
         train_agent(**train_kwargs)
     elif args.command == "evaluate":
