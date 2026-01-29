@@ -7,11 +7,14 @@ This guide will help you get started with reinforcement learning for Tetris.
 Install the RL dependencies:
 
 ```bash
-# Basic RL dependencies
-uv pip install -e ".[rl]"
+# Basic RL dependencies (recommended)
+uv sync --extra rl
 
 # Or with full visualization tools
-uv pip install -e ".[rl-full]"
+uv sync --extra rl-full
+
+# Alternative: using uv pip (pip-compatible)
+uv pip install -e ".[rl]"
 ```
 
 ## Quick Start
@@ -199,6 +202,8 @@ python -m tetris.rl.visualization plot \
 
 Install dependencies:
 ```bash
+uv sync --extra rl
+# or
 uv pip install -e ".[rl]"
 ```
 

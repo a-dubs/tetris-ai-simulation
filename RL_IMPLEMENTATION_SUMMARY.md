@@ -93,11 +93,14 @@ TetrisEnv (Gymnasium)
 ### Installation
 
 ```bash
-# Install RL dependencies
-uv pip install -e ".[rl]"
+# Install RL dependencies (recommended)
+uv sync --extra rl
 
 # Or with full visualization
-uv pip install -e ".[rl-full]"
+uv sync --extra rl-full
+
+# Alternative: using uv pip
+uv pip install -e ".[rl]"
 ```
 
 ### Training
@@ -234,7 +237,7 @@ The RL implementation integrates seamlessly with the existing architecture:
 ## Next Steps
 
 ### Immediate
-1. Install dependencies: `uv pip install -e ".[rl]"`
+1. Install dependencies: `uv sync --extra rl`
 2. Run initial training: `python -m tetris.rl.training train --timesteps 10000`
 3. Evaluate and visualize: `python -m tetris.rl.training visualize --model <path>`
 
