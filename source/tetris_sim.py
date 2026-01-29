@@ -3,8 +3,28 @@
 # #==================================================== IMPORTS =====================================================# #
 # #==================================================================================================================# #
 # #==================================================================================================================# #
-import tkinter as tk
-from tkinter import Tk, Canvas, Frame, BOTH, StringVar
+# Make tkinter imports optional for headless operation
+try:
+    import tkinter as tk
+    from tkinter import Tk, Canvas, Frame, BOTH, StringVar
+    TKINTER_AVAILABLE = True
+except ImportError:
+    TKINTER_AVAILABLE = False
+    # Create dummy classes for when tkinter is not available
+    class Tk:
+        pass
+    class Canvas:
+        pass
+    class Frame:
+        pass
+    class StringVar:
+        def __init__(self, *args, **kwargs):
+            self._value = ""
+        def set(self, value):
+            self._value = value
+        def get(self):
+            return self._value
+
 from tetrimino import Tetrimino
 import tetris_ai
 from tetris_ai import TetrisAI
@@ -77,44 +97,56 @@ mino_size = 40
 
 
 mino_border_thickness = 1
-window = tk.Tk()
-window.title("Tetris Simulation")
-window.resizable(False, False)
 
-scoreboard_view = tk.Frame(master=window, padx=25, pady=5)
-message_view = tk.Frame(master=window, padx=25, pady=5)
+# Only initialize GUI if tkinter is available
+if TKINTER_AVAILABLE:
+    window = tk.Tk()
+    window.title("Tetris Simulation")
+    window.resizable(False, False)
 
-message_text = StringVar(window)
-message_label = tk.Label(master=message_view, textvariable = message_text)
-message_label.pack(fill=tk.X)
+    scoreboard_view = tk.Frame(master=window, padx=25, pady=5)
+    message_view = tk.Frame(master=window, padx=25, pady=5)
 
-scoreboard_view.grid_columnconfigure(0, weight=1)
-scoreboard_view.grid_columnconfigure(1, weight=1)
-scoreboard_view.grid_columnconfigure(2, weight=1)
+    message_text = StringVar(window)
+    message_label = tk.Label(master=message_view, textvariable = message_text)
+    message_label.pack(fill=tk.X)
 
-level_label = StringVar(window)
-clears_label = StringVar(window)
-score_label = StringVar(window) 
+    scoreboard_view.grid_columnconfigure(0, weight=1)
+    scoreboard_view.grid_columnconfigure(1, weight=1)
+    scoreboard_view.grid_columnconfigure(2, weight=1)
 
-level_view = tk.Label(master=scoreboard_view, textvariable=level_label)
-level_view.grid(row=0, column=0)
+    level_label = StringVar(window)
+    clears_label = StringVar(window)
+    score_label = StringVar(window) 
 
-clears_view = tk.Label(master=scoreboard_view, textvariable=clears_label)
-clears_view.grid(row=0, column=1)
+    level_view = tk.Label(master=scoreboard_view, textvariable=level_label)
+    level_view.grid(row=0, column=0)
 
-score_view = tk.Label(master=scoreboard_view, textvariable=score_label)
-score_view.grid(row=0, column=2)
+    clears_view = tk.Label(master=scoreboard_view, textvariable=clears_label)
+    clears_view.grid(row=0, column=1)
 
-scoreboard_view.pack(fill=tk.X)
-message_view.pack(fill=tk.X)
+    score_view = tk.Label(master=scoreboard_view, textvariable=score_label)
+    score_view.grid(row=0, column=2)
 
-playfield_view = tk.Canvas(
-    window, width=playfield_width * mino_size, height=playfield_height * mino_size)
-playfield_view.pack(side="left")
+    scoreboard_view.pack(fill=tk.X)
+    message_view.pack(fill=tk.X)
 
-queue_view = tk.Canvas(master=window, width=4 * mino_size,
-                       height=4 * mino_size, bo=2)
-queue_view.pack(side="right", anchor="n")
+    playfield_view = tk.Canvas(
+        window, width=playfield_width * mino_size, height=playfield_height * mino_size)
+    playfield_view.pack(side="left")
+
+    queue_view = tk.Canvas(master=window, width=4 * mino_size,
+                           height=4 * mino_size, bo=2)
+    queue_view.pack(side="right", anchor="n")
+else:
+    # Dummy objects for headless operation
+    window = None
+    playfield_view = None
+    queue_view = None
+    message_text = StringVar()
+    level_label = StringVar()
+    clears_label = StringVar()
+    score_label = StringVar()
 
 
 paused = False
@@ -171,9 +203,11 @@ generate_scoreboard()
 # #==================================================================================================================# #
 
 def draw_mino(x, y, c):
+    global playfield, playfield_view
+    if not TKINTER_AVAILABLE or playfield_view is None:
+        return
     c = c.lower()
     # print("x: " + str(x) + "; y: " + str(y))
-    global playfield, playfield_view
     if y > playfield_height - 4 and c == ' ':
         playfield_view.create_rectangle((x-1)*mino_size, (playfield_height-y)*mino_size, x*mino_size - mino_border_thickness, (playfield_height - y+1)*mino_size - mino_border_thickness,
         outline=outline_colors[c], fill="#222", width=mino_border_thickness)
@@ -186,6 +220,8 @@ def draw_mino(x, y, c):
 
 def draw_queue():
     global queue_view, next_tet
+    if not TKINTER_AVAILABLE or queue_view is None:
+        return
     queue_view.delete("all")
     nt = deepcopy(next_tet)
     queue_view.update()
@@ -209,7 +245,9 @@ def log_pf():
         print("".join(playfield[-i-1]))
 
 def draw_playfield():
-    global playfield_view 
+    global playfield_view
+    if not TKINTER_AVAILABLE or playfield_view is None:
+        return 
     playfield_view.delete("all")
     ghost_tet = deepcopy(active_tet)
     #print("active tet: x= " + str(active_tet.x) + ", y= " + str(active_tet.y))
@@ -230,6 +268,8 @@ def draw_tetrimino(tet):
                 draw_mino(tet.x + col, tet.y+row, tet.minos[row][col])
 
 def update_scoreboard():
+    if not TKINTER_AVAILABLE:
+        return
     global level_label, score_label, clears_label
     level_label.set("LEVEL: " + str(scoreboard["level"]))
     clears_label.set("CLEARS LEFT: " + str(clears_needed() - scoreboard["clears"]))
@@ -279,11 +319,15 @@ def advance_sim(event):
         paused = False    
 
 def stop_game():
-    playfield_view.delete("all")
-    window.quit()
+    if TKINTER_AVAILABLE and playfield_view is not None:
+        playfield_view.delete("all")
+    if TKINTER_AVAILABLE and window is not None:
+        window.quit()
 
 def update_window():
     global window, playfield_view
+    if not TKINTER_AVAILABLE or window is None:
+        return
     draw_queue()
     draw_playfield()
     update_scoreboard()
@@ -816,9 +860,10 @@ update_window()
 input() """
 
 
-window.bind("<n>", advance_sim)
-window.bind("<Return>", advance_sim)
-window.bind("<N>", advance_sim)
+if TKINTER_AVAILABLE and window is not None:
+    window.bind("<n>", advance_sim)
+    window.bind("<Return>", advance_sim)
+    window.bind("<N>", advance_sim)
 """
 window.bind("<Up>", rotate_ccw)
 window.bind("<Right>", move_right)
