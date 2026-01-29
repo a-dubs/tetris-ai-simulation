@@ -24,6 +24,7 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 import statistics
 import random
+import time
 
 from tetris.ai.fast import FastAIPlayer
 from tetris.core.game_engine import GameEngine
@@ -101,17 +102,60 @@ class EvaluationResult:
     std_lines: float
     num_games: int
     seed: Optional[int] = None
+    min_score: Optional[float] = None
+    min_lines: Optional[float] = None
+    min_moves: Optional[float] = None
     
-    def fitness(self) -> float:
-        """Calculate fitness score (higher is better)."""
-        # Weighted combination: prioritize score and lines
-        # Normalize by typical values to balance
-        score_component = self.avg_score / 10000.0  # ~10k is good
-        lines_component = self.avg_lines / 50.0     # ~50 lines is good
-        moves_component = self.avg_moves / 1000.0  # ~1000 moves is good
+    def fitness(self, robust: bool = True) -> float:
+        """Calculate fitness score (higher is better).
         
-        # Weighted sum (prioritize score and lines)
-        return 0.5 * score_component + 0.4 * lines_component + 0.1 * moves_component
+        Args:
+            robust: If True, use robust fitness that considers mean, minimum,
+                    and consistency. If False, use simple mean-only fitness.
+        
+        Returns:
+            Fitness score (higher is better)
+        """
+        if not robust:
+            # Simple mean-only fitness (original)
+            score_component = self.avg_score / 10000.0  # ~10k is good
+            lines_component = self.avg_lines / 50.0     # ~50 lines is good
+            moves_component = self.avg_moves / 1000.0  # ~1000 moves is good
+            return 0.5 * score_component + 0.4 * lines_component + 0.1 * moves_component
+        
+        # Robust fitness: balances mean, minimum, and consistency
+        # Average performance (50%)
+        avg_component = 0.5 * (
+            0.5 * (self.avg_score / 10000.0) +
+            0.4 * (self.avg_lines / 50.0) +
+            0.1 * (self.avg_moves / 1000.0)
+        )
+        
+        # Minimum performance (30%) - prevent terrible games
+        min_component = 0.0
+        if self.min_score is not None and self.min_lines is not None and self.min_moves is not None:
+            min_score_norm = self.min_score / 10000.0
+            min_lines_norm = self.min_lines / 50.0
+            min_moves_norm = self.min_moves / 1000.0
+            min_component = 0.3 * (
+                0.5 * min_score_norm +
+                0.4 * min_lines_norm +
+                0.1 * min_moves_norm
+            )
+        
+        # Consistency penalty (20%) - penalize high variance
+        consistency_penalty = 0.0
+        if self.avg_score > 0 and self.std_score > 0:
+            cv_score = self.std_score / self.avg_score  # Coefficient of variation
+            cv_lines = self.std_lines / self.avg_lines if self.avg_lines > 0 else 0.0
+            # Penalize high variance (normalize CV to [0, 1] range, assuming CV < 2.0 is reasonable)
+            consistency_penalty = -0.2 * min(1.0, (cv_score + cv_lines) / 2.0)
+        
+        return avg_component + min_component + consistency_penalty
+
+
+# Module-level constant - WeightBounds never changes, reuse for performance
+_DEFAULT_BOUNDS = WeightBounds()
 
 
 def evaluate_weights(
@@ -119,6 +163,7 @@ def evaluate_weights(
     num_games: int = 20,
     seed: Optional[int] = None,
     headless: bool = True,
+    perf_log: Optional[Dict[str, List[float]]] = None,
 ) -> EvaluationResult:
     """Evaluate a set of weights by running full games.
     
@@ -131,46 +176,87 @@ def evaluate_weights(
         num_games: Number of full games to run
         seed: Random seed for reproducibility
         headless: Whether to run headless
+        perf_log: Optional dict to log performance timings
         
     Returns:
         EvaluationResult with statistics from completed games
     """
+    if perf_log is None:
+        perf_log = {}
+    
+    eval_start = time.perf_counter()
     scores = []
     lines = []
     moves = []
     
-    # Clip params to valid bounds
-    bounds = WeightBounds()
-    params = bounds.clip_params(params)
+    # Clip params to valid bounds (use module-level constant)
+    clip_start = time.perf_counter()
+    params = _DEFAULT_BOUNDS.clip_params(params)
+    if "clip_params_time" not in perf_log:
+        perf_log["clip_params_time"] = []
+    perf_log["clip_params_time"].append(time.perf_counter() - clip_start)
+    
+    # Create reusable objects (renderer and config are stateless for headless)
+    setup_start = time.perf_counter()
+    renderer = create_renderer(headless)
+    config = SimulationConfig(
+        ai_type="fast",  # Will be overridden
+        headless=headless,
+        max_moves=None,  # No limit - run until game over
+        max_time=None,
+        initial_level=1,
+        moves_per_second=4,
+    )
+    if "setup_time" not in perf_log:
+        perf_log["setup_time"] = []
+    perf_log["setup_time"].append(time.perf_counter() - setup_start)
+    
+    # Track per-game timings
+    game_times = []
+    ai_creation_times = []
+    engine_creation_times = []
+    sim_run_times = []
     
     for game_idx in range(num_games):
+        game_start = time.perf_counter()
+        
         game_seed = seed + game_idx if seed is not None else None
         if game_seed is not None:
             random.seed(game_seed)
             np.random.seed(game_seed)
         
         # Create AI with these weights
+        ai_start = time.perf_counter()
         ai = FastAIPlayer(params=params)
+        ai_creation_times.append(time.perf_counter() - ai_start)
+        
+        # Create engine and simulator (engine has state, must be new each game)
+        engine_start = time.perf_counter()
+        engine = GameEngine()
+        sim = Simulator(engine, ai, renderer, config)
+        engine_creation_times.append(time.perf_counter() - engine_start)
         
         # Run simulation
-        config = SimulationConfig(
-            ai_type="fast",  # Will be overridden
-            headless=headless,
-            max_moves=10000,
-            max_time=None,
-            initial_level=1,
-            moves_per_second=4,
-        )
-        
-        engine = GameEngine()
-        renderer = create_renderer(headless)
-        sim = Simulator(engine, ai, renderer, config)
-        
+        sim_start = time.perf_counter()
         result = sim.run()
+        sim_run_times.append(time.perf_counter() - sim_start)
         
         scores.append(result.final_state.score)
         lines.append(result.final_state.lines_cleared)
         moves.append(result.moves_executed)
+        
+        game_times.append(time.perf_counter() - game_start)
+    
+    total_time = time.perf_counter() - eval_start
+    
+    # Log performance metrics
+    perf_log["total_eval_time"] = total_time
+    perf_log["num_games"] = num_games
+    perf_log["avg_game_time"] = statistics.mean(game_times) if game_times else 0.0
+    perf_log["avg_ai_creation_time"] = statistics.mean(ai_creation_times) if ai_creation_times else 0.0
+    perf_log["avg_engine_creation_time"] = statistics.mean(engine_creation_times) if engine_creation_times else 0.0
+    perf_log["avg_sim_run_time"] = statistics.mean(sim_run_times) if sim_run_times else 0.0
+    perf_log["total_game_times"] = game_times
     
     return EvaluationResult(
         params=params,
@@ -181,6 +267,9 @@ def evaluate_weights(
         std_lines=statistics.stdev(lines) if len(lines) > 1 else 0.0,
         num_games=num_games,
         seed=seed,
+        min_score=min(scores) if scores else None,
+        min_lines=min(lines) if lines else None,
+        min_moves=min(moves) if moves else None,
     )
 
 
@@ -222,6 +311,7 @@ def optimize_evolutionary(
     population_size: int = 10,
     seed: Optional[int] = 42,
     output_file: Optional[str] = None,
+    robust_fitness: bool = True,
 ) -> EvaluationResult:
     """Optimize weights using CMA-ES evolutionary strategy.
     
@@ -240,6 +330,8 @@ def optimize_evolutionary(
         population_size: CMA-ES population size
         seed: Random seed
         output_file: Path to save best params JSON
+        robust_fitness: If True, use robust fitness (mean + minimum + consistency).
+                       If False, use simple mean-only fitness.
         
     Returns:
         Best EvaluationResult found
@@ -251,14 +343,12 @@ def optimize_evolutionary(
             "CMA-ES requires 'cma' package. Install with: uv pip install cma"
         )
     
-    bounds = WeightBounds()
-    
     # Start from initial params or defaults
     if initial_params is None:
         initial_params = FastAIPlayer._get_improved_default_params()
     
     # Convert to normalized vector
-    x0 = params_to_vector(initial_params, bounds)
+    x0 = params_to_vector(initial_params, _DEFAULT_BOUNDS)
     
     # CMA-ES options
     sigma0 = 0.3  # Initial standard deviation (30% of range)
@@ -273,14 +363,47 @@ def optimize_evolutionary(
     best_result = None
     best_fitness = float("-inf")
     history = []
+    perf_log = {
+        "total_eval_times": [],
+        "vector_times": [],
+        "eval_weights_times": [],
+        "fitness_times": [],
+        "all_game_times": [],
+    }
+    eval_count = 0
+    total_start_time = time.perf_counter()
     
     def objective(x: np.ndarray) -> float:
         """Objective function: negative fitness (CMA-ES minimizes)."""
-        nonlocal best_result, best_fitness
+        nonlocal best_result, best_fitness, eval_count
         
-        params = vector_to_params(x, bounds)
-        result = evaluate_weights(params, num_games=games_per_run, seed=seed)
-        fitness = result.fitness()
+        eval_start = time.perf_counter()
+        eval_count += 1
+        
+        vector_start = time.perf_counter()
+        params = vector_to_params(x, _DEFAULT_BOUNDS)
+        vector_time = time.perf_counter() - vector_start
+        perf_log["vector_times"].append(vector_time)
+        
+        eval_weights_start = time.perf_counter()
+        # Create fresh perf_log for this evaluation to avoid overwriting
+        eval_perf_log = {}
+        result = evaluate_weights(params, num_games=games_per_run, seed=seed, perf_log=eval_perf_log)
+        eval_weights_time = time.perf_counter() - eval_weights_start
+        perf_log["eval_weights_times"].append(eval_weights_time)
+        
+        # Accumulate game times
+        if "total_game_times" in eval_perf_log:
+            perf_log["all_game_times"].extend(eval_perf_log["total_game_times"])
+        
+        fitness_start = time.perf_counter()
+        # Use robust fitness (considers mean, minimum, consistency)
+        fitness = result.fitness(robust=robust_fitness)
+        fitness_time = time.perf_counter() - fitness_start
+        perf_log["fitness_times"].append(fitness_time)
+        
+        total_eval_time = time.perf_counter() - eval_start
+        perf_log["total_eval_times"].append(total_eval_time)
         
         history.append({
             "iteration": len(history),
@@ -288,6 +411,7 @@ def optimize_evolutionary(
             "avg_score": result.avg_score,
             "avg_lines": result.avg_lines,
             "params": params,
+            "eval_time": total_eval_time,
         })
         
         # Track best
@@ -295,18 +419,26 @@ def optimize_evolutionary(
             best_fitness = fitness
             best_result = result
         
+        # Log progress every 50 evaluations (less verbose)
+        if eval_count % 50 == 0:
+            avg_eval_time = statistics.mean([h["eval_time"] for h in history[-50:]])
+            print(f"  [Progress] Eval #{eval_count}: avg_time={avg_eval_time:.3f}s per evaluation")
+        
         return -fitness  # Minimize negative fitness
     
     print(f"Starting CMA-ES optimization...")
     print(f"  Runs: {num_runs}")
     print(f"  Games per run: {games_per_run}")
     print(f"  Population size: {population_size}")
+    print(f"  Robust fitness: {robust_fitness} (mean{' + min + consistency' if robust_fitness else ''})")
     print(f"  Initial params: {initial_params}")
     print()
     
     # Run CMA-ES
+    cma_start_time = time.perf_counter()
     es = cma.CMAEvolutionStrategy(x0, sigma0, options)
     es.optimize(objective)
+    cma_total_time = time.perf_counter() - cma_start_time
     
     print(f"\nOptimization complete!")
     print(f"Best fitness: {best_fitness:.4f}")
@@ -316,6 +448,23 @@ def optimize_evolutionary(
         print(f"Best params:")
         for key, value in best_result.params.items():
             print(f"  {key}: {value}")
+    
+    # Print performance summary
+    if perf_log and perf_log["total_eval_times"]:
+        total_eval_time = sum(perf_log["total_eval_times"])
+        total_games = len(perf_log["all_game_times"])
+        
+        print(f"\n{'='*70}")
+        print("Performance Summary")
+        print(f"{'='*70}")
+        print(f"Total time: {cma_total_time:.2f}s")
+        print(f"Total evaluations: {eval_count}")
+        print(f"Total games evaluated: {total_games}")
+        if perf_log["total_eval_times"]:
+            print(f"Avg time per evaluation: {statistics.mean(perf_log['total_eval_times']):.3f}s")
+        if perf_log["all_game_times"]:
+            print(f"Avg time per game: {statistics.mean(perf_log['all_game_times']):.4f}s")
+        print(f"{'='*70}")
     
     # Save best params
     if output_file and best_result:
@@ -374,14 +523,12 @@ def optimize_bayesian(
             "Install with: uv pip install scikit-optimize"
         )
     
-    bounds = WeightBounds()
-    
     # Define search space
     dimensions = []
-    param_names = bounds.get_param_names()
+    param_names = _DEFAULT_BOUNDS.get_param_names()
     
     for name in param_names:
-        low, high = getattr(bounds, name)
+        low, high = getattr(_DEFAULT_BOUNDS, name)
         if name == "stack_d_thresh":
             dimensions.append(Integer(low, high, name=name))
         else:
@@ -403,7 +550,7 @@ def optimize_bayesian(
         nonlocal best_result, best_fitness
         
         result = evaluate_weights(params, num_games=games_per_iter, seed=seed)
-        fitness = result.fitness()
+        fitness = result.fitness(robust=True)
         
         history.append({
             "iteration": len(history),
@@ -509,8 +656,7 @@ def optimize_meta_rl(
             "Install with: uv pip install gymnasium stable-baselines3"
         )
     
-    bounds = WeightBounds()
-    param_names = bounds.get_param_names()
+    param_names = _DEFAULT_BOUNDS.get_param_names()
     n_params = len(param_names)
     
     class WeightOptimizationEnv(gym.Env):
@@ -540,7 +686,7 @@ def optimize_meta_rl(
             
             # Previous episode's weights and performance
             self.prev_params = FastAIPlayer._get_improved_default_params()
-            self.prev_vector = params_to_vector(self.prev_params, bounds)
+            self.prev_vector = params_to_vector(self.prev_params, _DEFAULT_BOUNDS)
             self.prev_score = 0.0
             self.prev_lines = 0.0
             self.prev_moves = 0.0
@@ -560,7 +706,7 @@ def optimize_meta_rl(
             """
             # Action directly sets weights (normalized [0, 1])
             new_vector = np.clip(action, 0.0, 1.0)
-            new_params = vector_to_params(new_vector, bounds)
+            new_params = vector_to_params(new_vector, _DEFAULT_BOUNDS)
             
             # Play full game(s) with these weights
             # No weight changes during gameplay - weights are fixed for entire game(s)
@@ -569,7 +715,7 @@ def optimize_meta_rl(
             )
             
             # Calculate reward from final game performance
-            fitness = result.fitness()
+            fitness = result.fitness(robust=True)
             reward = fitness * 10.0  # Scale up for RL
             
             # Update previous episode info for next observation
@@ -702,6 +848,8 @@ def main():
     evolve_parser.add_argument("--population-size", type=int, default=10, help="CMA-ES population size")
     evolve_parser.add_argument("--seed", type=int, default=42, help="Random seed")
     evolve_parser.add_argument("--output", type=str, help="Output JSON file")
+    evolve_parser.add_argument("--no-robust-fitness", action="store_true", 
+                               help="Use simple mean-only fitness instead of robust (mean+min+consistency)")
     
     # Bayesian
     bayesian_parser = subparsers.add_parser("bayesian", help="Bayesian optimization")
@@ -726,6 +874,7 @@ def main():
             population_size=args.population_size,
             seed=args.seed,
             output_file=args.output,
+            robust_fitness=not args.no_robust_fitness,
         )
     elif args.method == "bayesian":
         optimize_bayesian(
