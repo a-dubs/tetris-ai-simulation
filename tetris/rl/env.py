@@ -8,7 +8,7 @@ Tetris architecture. It demonstrates:
 4. Basic training loop with visualization
 
 To use this, install RL dependencies:
-    pip install gymnasium stable-baselines3 tensorboard
+    uv pip install gymnasium stable-baselines3 tensorboard
 
 Then train:
     python -m tetris.rl.training train --timesteps 100000
@@ -503,14 +503,14 @@ def train_rl_agent(
         model_path: Path prefix for saved models
     """
     if not GYMNASIUM_AVAILABLE:
-        print("Error: gymnasium not installed. Install with: pip install gymnasium stable-baselines3")
+        print("Error: gymnasium not installed. Install with: uv pip install gymnasium stable-baselines3")
         return
     
     try:
         from stable_baselines3 import PPO
         from stable_baselines3.common.callbacks import EvalCallback, CheckpointCallback
     except ImportError:
-        print("Error: stable-baselines3 not installed. Install with: pip install stable-baselines3")
+        print("Error: stable-baselines3 not installed. Install with: uv pip install stable-baselines3")
         return
     
     # Create environment

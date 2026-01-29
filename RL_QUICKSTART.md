@@ -8,10 +8,10 @@ Install the RL dependencies:
 
 ```bash
 # Basic RL dependencies
-pip install -e ".[rl]"
+uv pip install -e ".[rl]"
 
 # Or with full visualization tools
-pip install -e ".[rl-full]"
+uv pip install -e ".[rl-full]"
 ```
 
 ## Quick Start
@@ -199,7 +199,7 @@ python -m tetris.rl.visualization plot \
 
 Install dependencies:
 ```bash
-pip install -e ".[rl]"
+uv pip install -e ".[rl]"
 ```
 
 ### "CUDA out of memory"
@@ -223,7 +223,7 @@ Reduce batch size or use CPU:
 
 ### Visualization not working
 
-- Ensure pygame is installed: `pip install pygame`
+- Ensure pygame is installed: `uv pip install pygame`
 - Check display settings (for headless servers)
 - Try `render_mode=None` for headless training
 

@@ -107,7 +107,7 @@ class TrainingVisualizer:
             save_path: Optional path to save figure
         """
         if not MATPLOTLIB_AVAILABLE:
-            print("matplotlib not available. Install with: pip install matplotlib")
+            print("matplotlib not available. Install with: uv pip install matplotlib")
             return
         
         if len(self.metrics) == 0:
@@ -323,7 +323,7 @@ def load_tensorboard_logs(log_dir: str) -> Dict:
         Dictionary with scalar metrics
     """
     if not TENSORBOARD_AVAILABLE:
-        print("TensorBoard not available. Install with: pip install tensorboard")
+        print("TensorBoard not available. Install with: uv pip install tensorboard")
         return {}
     
     try:
@@ -358,7 +358,7 @@ def create_training_dashboard(metrics_file: str, output_path: str = "training_da
         PLOTLY_AVAILABLE = True
     except ImportError:
         PLOTLY_AVAILABLE = False
-        print("plotly not available. Install with: pip install plotly")
+        print("plotly not available. Install with: uv pip install plotly")
         return
     
     # Load metrics

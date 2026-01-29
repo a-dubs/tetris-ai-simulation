@@ -14,21 +14,21 @@ def test_imports():
         import gymnasium as gym
         print("✓ gymnasium")
     except ImportError:
-        print("✗ gymnasium not found. Install with: pip install gymnasium")
+        print("✗ gymnasium not found. Install with: uv pip install gymnasium")
         return False
     
     try:
         from stable_baselines3 import PPO
         print("✓ stable-baselines3")
     except ImportError:
-        print("✗ stable-baselines3 not found. Install with: pip install stable-baselines3")
+        print("✗ stable-baselines3 not found. Install with: uv pip install stable-baselines3")
         return False
     
     try:
         import numpy as np
         print("✓ numpy")
     except ImportError:
-        print("✗ numpy not found. Install with: pip install numpy")
+        print("✗ numpy not found. Install with: uv pip install numpy")
         return False
     
     try:

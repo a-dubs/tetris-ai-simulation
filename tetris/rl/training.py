@@ -34,7 +34,7 @@ try:
 except ImportError as e:
     RL_AVAILABLE = False
     print(f"RL dependencies not available: {e}")
-    print("Install with: pip install gymnasium stable-baselines3")
+    print("Install with: uv pip install gymnasium stable-baselines3")
 
 from tetris.rl.env import TetrisEnv, TrainingMetrics
 from tetris.rl.visualization import TrainingVisualizer
